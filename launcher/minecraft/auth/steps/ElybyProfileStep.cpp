@@ -26,10 +26,6 @@ void ElybyProfileStep::perform() {
     requestor->get(request);
 }
 
-void ElybyProfileStep::rehydrate() {
-    // NOOP, for now. We only save bools and there's nothing to check.
-}
-
 void ElybyProfileStep::onRequestDone(
     QNetworkReply::NetworkError error,
     QByteArray data,

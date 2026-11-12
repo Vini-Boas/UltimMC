@@ -76,6 +76,15 @@ Portions are licensed under MS-PL:
     laws, the contributors exclude the implied warranties of merchantability,
     fitness for a particular purpose and non-infringement.
 
+# Mojang assets
+
+    MultiMC contains some Minecraft assets owned by Mojang/Microsoft.
+    These are included, because MultiMC is, after all, a Minecraft launcher.
+    And without some creeper faces, what is even the point.
+
+    If someone from Mojang finds this objectionable, we'll replace these
+    with suitable substitutes. Until then, enjoy the Minecraft vibes.
+
 # MinGW runtime (Windows)
 
     Copyright (c) 2012 MinGW.org project
@@ -122,29 +131,6 @@ Portions are licensed under MS-PL:
 
     You should have received a copy of the GNU Lesser General Public License
     along with libnbt++.  If not, see <http://www.gnu.org/licenses/>.
-
-# rainbow (KGuiAddons)
-
-    Copyright (C) 2007 Matthew Woehlke <mw_triad@users.sourceforge.net>
-    Copyright (C) 2007 Olaf Schmidt <ojschmidt@kde.org>
-    Copyright (C) 2007 Thomas Zander <zander@kde.org>
-    Copyright (C) 2007 Zack Rusin <zack@kde.org>
-    Copyright (C) 2015 Petr Mrazek <peterix@gmail.com>
-
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Library General Public
-    License as published by the Free Software Foundation; either
-    version 2 of the License, or (at your option) any later version.
-
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Library General Public License for more details.
-
-    You should have received a copy of the GNU Library General Public License
-    along with this library; see the file COPYING.LIB.  If not, write to
-    the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-    Boston, MA 02110-1301, USA.
 
 # Hoedown
 
@@ -314,6 +300,30 @@ Portions are licensed under MS-PL:
     FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
     ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
     DEALINGS IN THE SOFTWARE.
+
+# qt-qrcodegenerator
+
+    MIT License
+
+    Copyright (c) 2023 Alex Spataru
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
 
 # tomlc99
 

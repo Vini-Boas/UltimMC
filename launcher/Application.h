@@ -7,7 +7,7 @@
 #include <QIcon>
 #include <QDateTime>
 #include <QUrl>
-#include <updater/GoUpdate.h>
+#include <updater/v1/GoUpdate.h>
 
 #include <BaseInstance.h>
 
@@ -27,14 +27,20 @@ class AccountList;
 class IconList;
 class QNetworkAccessManager;
 class JavaInstallList;
-class UpdateChecker;
+namespace UpdaterV1 {
+    class UpdateChecker;
+}
+namespace UpdaterV2 {
+    class Checker;
+}
 class BaseProfilerFactory;
 class BaseDetachedToolFactory;
 class TranslationsModel;
-class ITheme;
+class ThemeManager;
 class MCEditTool;
 class AuthServer;
-class GAnalytics;
+class CapeCache;
+class SkinsModel;
 
 namespace Meta {
     class Index;
@@ -61,10 +67,6 @@ public:
     Application(int &argc, char **argv);
     virtual ~Application();
 
-    GAnalytics *analytics() const {
-        return m_analytics;
-    }
-
     std::shared_ptr<SettingsObject> settings() const {
         return m_settings;
     }
@@ -77,12 +79,17 @@ public:
 
     void setIconTheme(const QString& name);
 
-    std::vector<ITheme *> getValidApplicationThemes();
+    ThemeManager *themeManager() {
+        return m_themeManager.get();
+    }
 
-    void setApplicationTheme(const QString& name, bool initial);
-
-    shared_qobject_ptr<UpdateChecker> updateChecker() {
+    shared_qobject_ptr<UpdaterV1::UpdateChecker> updateChecker() {
         return m_updateChecker;
+    }
+
+    // updater v2, in place of updateChecker() when BuildConfig.UPDATER_VERSION is 2
+    shared_qobject_ptr<UpdaterV2::Checker> updaterV2() {
+        return m_updaterV2;
     }
 
     std::shared_ptr<TranslationsModel> translations();
@@ -95,6 +102,10 @@ public:
 
     std::shared_ptr<IconList> icons() const {
         return m_icons;
+    }
+
+    shared_qobject_ptr<SkinsModel> skinsModel() const {
+        return m_skinsModel;
     }
 
     MCEditTool *mcedit() const {
@@ -123,6 +134,8 @@ public:
 
     shared_qobject_ptr<Meta::Index> metadataIndex();
 
+    shared_qobject_ptr<CapeCache> capeCache();
+
     QString getJarsPath();
 
     /// this is the root of the 'installation'. Used for automatic updates
@@ -138,6 +151,8 @@ public:
 
     InstanceWindow *showInstanceWindow(InstancePtr instance, QString page = QString());
     MainWindow *showMainWindow(bool minimized = false);
+
+    void ShowAccountsDialog(class QWidget * parent);
 
     void updateIsRunning(bool running);
     bool updatesAreAllowed();
@@ -165,7 +180,6 @@ private slots:
     void messageReceived(const QByteArray & message);
     void controllerSucceeded();
     void controllerFailed(const QString & error);
-    void analyticsSettingChanged(const Setting &setting, QVariant value);
     void setupWizardFinished(int status);
 
 private:
@@ -185,11 +199,15 @@ private:
 
     shared_qobject_ptr<QNetworkAccessManager> m_network;
 
-    shared_qobject_ptr<UpdateChecker> m_updateChecker;
+    shared_qobject_ptr<UpdaterV1::UpdateChecker> m_updateChecker;
+    shared_qobject_ptr<UpdaterV2::Checker> m_updaterV2;
     shared_qobject_ptr<AccountList> m_accounts;
 
     shared_qobject_ptr<HttpMetaCache> m_metacache;
     shared_qobject_ptr<Meta::Index> m_metadataIndex;
+
+    shared_qobject_ptr<CapeCache> m_capeCache;
+    shared_qobject_ptr<SkinsModel> m_skinsModel;
 
     std::shared_ptr<SettingsObject> m_settings;
     std::shared_ptr<InstanceList> m_instances;
@@ -197,7 +215,8 @@ private:
     std::shared_ptr<JavaInstallList> m_javalist;
     std::shared_ptr<TranslationsModel> m_translations;
     std::shared_ptr<GenericPageProvider> m_globalSettingsProvider;
-    std::map<QString, std::unique_ptr<ITheme>> m_themes;
+    // after m_settings, so it goes first: it holds on to the settings
+    std::unique_ptr<ThemeManager> m_themeManager;
     std::unique_ptr<MCEditTool> m_mcedit;
     std::shared_ptr<AuthServer> m_authserver;
     QString m_jarsPath;
@@ -231,7 +250,6 @@ private:
     // peer launcher instance connector - used to implement single instance launcher and signalling
     LocalPeer * m_peerInstance = nullptr;
 
-    GAnalytics * m_analytics = nullptr;
     SetupWizard * m_setupWizard = nullptr;
 public:
     QString m_instanceIdToLaunch;

@@ -21,7 +21,6 @@
 #include "java/JavaChecker.h"
 #include "ui/pages/BasePage.h"
 #include <Application.h>
-#include "ui/ColorCache.h"
 #include <translations/TranslationsModel.h>
 
 class QTextCharFormat;
@@ -61,26 +60,26 @@ public:
 private:
     void applySettings();
     void loadSettings();
+    // updater v2's tier; only in builds that use it
 
 private
 slots:
     void on_instDirBrowseBtn_clicked();
-    void on_modsDirBrowseBtn_clicked();
-    void on_iconsDirBrowseBtn_clicked();
-    void on_migrateDataFolderMacBtn_clicked();
+    void on_instDirOpenBtn_clicked();
 
-    /*!
-     * Updates the font preview
-     */
-    void refreshFontPreview();
+    void on_modsDirBrowseBtn_clicked();
+    void on_modsDirOpenBtn_clicked();
+
+    void on_iconsDirBrowseBtn_clicked();
+    void on_iconsDirOpenBtn_clicked();
+
+    void on_skinsDirBrowseBtn_clicked();
+    void on_skinsDirOpenBtn_clicked();
+
+    void on_migrateDataFolderMacBtn_clicked();
 
 private:
     Ui::LauncherPage *ui;
-
-    // default format for the font preview...
-    QTextCharFormat *defaultFormat;
-
-    std::unique_ptr<LogColorCache> m_colors;
 
     std::shared_ptr<TranslationsModel> m_languageModel;
 };

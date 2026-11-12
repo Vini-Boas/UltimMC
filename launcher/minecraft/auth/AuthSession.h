@@ -6,6 +6,7 @@
 #include "QObjectPtr.h"
 
 class MinecraftAccount;
+class BaseAuthProvider;
 class QNetworkAccessManager;
 
 struct AuthSession
@@ -38,8 +39,10 @@ struct AuthSession
     QString player_name;
     // profile ID
     QString uuid;
-    // 'legacy' or 'mojang', depending on account type
+    // 'msa', 'local' or 'elyby', depending on account type
     QString user_type;
+    // How the account this session belongs to authenticates. Decides whether the game needs the authlib injector.
+    std::shared_ptr<BaseAuthProvider> provider;
     // Did the auth server reply?
     bool auth_server_online = false;
     // Did the user request online mode?

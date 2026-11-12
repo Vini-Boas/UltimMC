@@ -1,46 +1,35 @@
 #pragma once
 
-#include <QObject>
-#include "QObjectPtr.h"
-#include <QDateTime>
-#include <QSet>
-#include <QProcess>
-#include <QDebug>
-
 #include "BaseAuthProvider.h"
 
+/*!
+ * Local (offline) accounts: any user name, no authentication. The game still talks to an
+ * auth server through the authlib injector, so the launcher runs a tiny one on 127.0.0.1 (AuthServer).
+ */
 class LocalAuthProvider : public BaseAuthProvider
 {
     Q_OBJECT
 
 public:
-    QString id()
+    QString id() override
     {
         return "local";
     }
 
-    QString displayName()
+    QString displayName() override
     {
         return "Local";
     }
 
-    bool localAuth()
+    QString injectorEndpoint() override
     {
-        return true;
-    }
-
-    QString injectorEndpoint()
-    {
-        return ((QString)"http://127.0.0.1:%1").arg(m_authServer->port());
+        return ((QString) "http://127.0.0.1:%1").arg(m_authServer->port());
     };
 
-    QString authEndpoint()
+    QString authEndpoint() override
     {
         return ((QString) "http://127.0.0.1:%1/auth/").arg(m_authServer->port());
     };
 
-    virtual bool useYggdrasil()
-    {
-        return true;
-    }
+    shared_qobject_ptr<AccountTask> createRefreshTask(AccountData* data) override;
 };

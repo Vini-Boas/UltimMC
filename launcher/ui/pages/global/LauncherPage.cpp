@@ -19,18 +19,17 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QDir>
-#include <QTextCharFormat>
 
-#include "updater/UpdateChecker.h"
+#include "updater/v1/UpdateChecker.h"
 
 #include "settings/SettingsObject.h"
 #include <FileSystem.h>
 #include "Application.h"
 #include "BuildConfig.h"
-#include "ui/themes/ITheme.h"
 
 #include <QApplication>
 #include <QProcess>
+#include <DesktopServices.h>
 
 // FIXME: possibly move elsewhere
 enum InstSortMode
@@ -44,31 +43,18 @@ enum InstSortMode
 LauncherPage::LauncherPage(QWidget *parent) : QWidget(parent), ui(new Ui::LauncherPage)
 {
     ui->setupUi(this);
-    auto origForeground = ui->fontPreview->palette().color(ui->fontPreview->foregroundRole());
-    auto origBackground = ui->fontPreview->palette().color(ui->fontPreview->backgroundRole());
-    m_colors.reset(new LogColorCache(origForeground, origBackground));
 
     ui->sortingModeGroup->setId(ui->sortByNameBtn, Sort_Name);
     ui->sortingModeGroup->setId(ui->sortLastLaunchedBtn, Sort_LastLaunch);
 
-    defaultFormat = new QTextCharFormat(ui->fontPreview->currentCharFormat());
-
     m_languageModel = APPLICATION->translations();
     loadSettings();
 
-    // Updater
-    if(!BuildConfig.UPDATER_ENABLED)
+    // Updater; updater v2 has a page of its own (UpdatesPage)
+    if(!BuildConfig.UPDATER_ENABLED || BuildConfig.UPDATER_VERSION == 2)
     {
         ui->updateSettingsBox->setHidden(true);
     }
-
-    // Analytics
-    if(BuildConfig.ANALYTICS_ID.isEmpty())
-    {
-        ui->tabWidget->removeTab(ui->tabWidget->indexOf(ui->analyticsTab));
-    }
-    connect(ui->fontSizeBox, SIGNAL(valueChanged(int)), SLOT(refreshFontPreview()));
-    connect(ui->consoleFont, SIGNAL(currentFontChanged(QFont)), SLOT(refreshFontPreview()));
 
     //move mac data button
     QFile file(QDir::current().absolutePath() + "/dontmovemacdata");
@@ -81,7 +67,6 @@ LauncherPage::LauncherPage(QWidget *parent) : QWidget(parent), ui(new Ui::Launch
 LauncherPage::~LauncherPage()
 {
     delete ui;
-    delete defaultFormat;
 }
 
 bool LauncherPage::apply()
@@ -121,6 +106,11 @@ void LauncherPage::on_instDirBrowseBtn_clicked()
         }
     }
 }
+void LauncherPage::on_instDirOpenBtn_clicked()
+{
+    DesktopServices::openDirectory(ui->instDirTextBox->text());
+}
+
 
 void LauncherPage::on_iconsDirBrowseBtn_clicked()
 {
@@ -133,6 +123,11 @@ void LauncherPage::on_iconsDirBrowseBtn_clicked()
         ui->iconsDirTextBox->setText(cooked_dir);
     }
 }
+void LauncherPage::on_iconsDirOpenBtn_clicked()
+{
+    DesktopServices::openDirectory(ui->iconsDirTextBox->text());
+}
+
 void LauncherPage::on_modsDirBrowseBtn_clicked()
 {
     QString raw_dir = QFileDialog::getExistingDirectory(this, tr("Mods Folder"), ui->modsDirTextBox->text());
@@ -144,6 +139,27 @@ void LauncherPage::on_modsDirBrowseBtn_clicked()
         ui->modsDirTextBox->setText(cooked_dir);
     }
 }
+void LauncherPage::on_modsDirOpenBtn_clicked()
+{
+    DesktopServices::openDirectory(ui->modsDirTextBox->text());
+}
+
+void LauncherPage::on_skinsDirBrowseBtn_clicked()
+{
+    QString raw_dir = QFileDialog::getExistingDirectory(this, tr("Skins Folder"), ui->skinsDirTextBox->text());
+
+    // do not allow current dir - it's dirty. Do not allow dirs that don't exist
+    if (!raw_dir.isEmpty() && QDir(raw_dir).exists())
+    {
+        QString cooked_dir = FS::NormalizePath(raw_dir);
+        ui->skinsDirTextBox->setText(cooked_dir);
+    }
+}
+void LauncherPage::on_skinsDirOpenBtn_clicked()
+{
+    DesktopServices::openDirectory(ui->skinsDirTextBox->text());
+}
+
 void LauncherPage::on_migrateDataFolderMacBtn_clicked()
 {
     QFile file(QDir::current().absolutePath() + "/dontmovemacdata");
@@ -159,64 +175,18 @@ void LauncherPage::applySettings()
     if (ui->resetNotificationsBtn->isChecked())
     {
         s->set("ShownNotifications", QString());
+        s->set("ConfirmLogClear", true);
     }
 
-    // Updates
-    s->set("AutoUpdate", ui->autoUpdateCheckBox->isChecked());
-    auto original = s->get("IconTheme").toString();
-    //FIXME: make generic
-    switch (ui->themeComboBox->currentIndex())
+    // Updates (updater v2's are on UpdatesPage)
+    if(BuildConfig.UPDATER_VERSION != 2)
     {
-    case 1:
-        s->set("IconTheme", "pe_dark");
-        break;
-    case 2:
-        s->set("IconTheme", "pe_light");
-        break;
-    case 3:
-        s->set("IconTheme", "pe_blue");
-        break;
-    case 4:
-        s->set("IconTheme", "pe_colored");
-        break;
-    case 5:
-        s->set("IconTheme", "OSX");
-        break;
-    case 6:
-        s->set("IconTheme", "iOS");
-        break;
-    case 7:
-        s->set("IconTheme", "flat");
-        break;
-    case 8:
-        s->set("IconTheme", "custom");
-        break;
-    case 0:
-    default:
-        s->set("IconTheme", "multimc");
-        break;
+        s->set("AutoUpdate", ui->autoUpdateCheckBox->isChecked());
     }
-
-    if(original != s->get("IconTheme"))
-    {
-        APPLICATION->setIconTheme(s->get("IconTheme").toString());
-    }
-
-    auto originalAppTheme = s->get("ApplicationTheme").toString();
-    auto newAppTheme = ui->themeComboBoxColors->currentData().toString();
-    if(originalAppTheme != newAppTheme)
-    {
-        s->set("ApplicationTheme", newAppTheme);
-        APPLICATION->setApplicationTheme(newAppTheme, false);
-    }
-
     // Console settings
     s->set("ShowConsole", ui->showConsoleCheck->isChecked());
     s->set("AutoCloseConsole", ui->autoCloseConsoleCheck->isChecked());
     s->set("ShowConsoleOnError", ui->showConsoleErrorCheck->isChecked());
-    QString consoleFontFamily = ui->consoleFont->currentFont().family();
-    s->set("ConsoleFont", consoleFontFamily);
-    s->set("ConsoleFontSize", ui->fontSizeBox->value());
     s->set("ConsoleMaxLines", ui->lineLimitSpinBox->value());
     s->set("ConsoleOverflowStop", ui->checkStopLogging->checkState() != Qt::Unchecked);
 
@@ -225,6 +195,7 @@ void LauncherPage::applySettings()
     s->set("InstanceDir", ui->instDirTextBox->text());
     s->set("CentralModsDir", ui->modsDirTextBox->text());
     s->set("IconsDir", ui->iconsDirTextBox->text());
+    s->set("SkinsDir", ui->skinsDirTextBox->text());
 
     auto sortMode = (InstSortMode)ui->sortingModeGroup->checkedId();
     switch (sortMode)
@@ -237,88 +208,16 @@ void LauncherPage::applySettings()
         s->set("InstSortMode", "Name");
         break;
     }
-
-    // Analytics
-    if(!BuildConfig.ANALYTICS_ID.isEmpty())
-    {
-        s->set("Analytics", ui->analyticsCheck->isChecked());
-    }
 }
 void LauncherPage::loadSettings()
 {
     auto s = APPLICATION->settings();
     // Updates
     ui->autoUpdateCheckBox->setChecked(s->get("AutoUpdate").toBool());
-    //FIXME: make generic
-    auto theme = s->get("IconTheme").toString();
-    if (theme == "pe_dark")
-    {
-        ui->themeComboBox->setCurrentIndex(1);
-    }
-    else if (theme == "pe_light")
-    {
-        ui->themeComboBox->setCurrentIndex(2);
-    }
-    else if (theme == "pe_blue")
-    {
-        ui->themeComboBox->setCurrentIndex(3);
-    }
-    else if (theme == "pe_colored")
-    {
-        ui->themeComboBox->setCurrentIndex(4);
-    }
-    else if (theme == "OSX")
-    {
-        ui->themeComboBox->setCurrentIndex(5);
-    }
-    else if (theme == "iOS")
-    {
-        ui->themeComboBox->setCurrentIndex(6);
-    }
-    else if (theme == "flat")
-    {
-        ui->themeComboBox->setCurrentIndex(7);
-    }
-    else if (theme == "custom")
-    {
-        ui->themeComboBox->setCurrentIndex(8);
-    }
-    else
-    {
-        ui->themeComboBox->setCurrentIndex(0);
-    }
-
-    {
-        auto currentTheme = s->get("ApplicationTheme").toString();
-        auto themes = APPLICATION->getValidApplicationThemes();
-        int idx = 0;
-        for(auto &theme: themes)
-        {
-            ui->themeComboBoxColors->addItem(theme->name(), theme->id());
-            if(currentTheme == theme->id())
-            {
-                ui->themeComboBoxColors->setCurrentIndex(idx);
-            }
-            idx++;
-        }
-    }
-
     // Console settings
     ui->showConsoleCheck->setChecked(s->get("ShowConsole").toBool());
     ui->autoCloseConsoleCheck->setChecked(s->get("AutoCloseConsole").toBool());
     ui->showConsoleErrorCheck->setChecked(s->get("ShowConsoleOnError").toBool());
-    QString fontFamily = APPLICATION->settings()->get("ConsoleFont").toString();
-    QFont consoleFont(fontFamily);
-    ui->consoleFont->setCurrentFont(consoleFont);
-
-    bool conversionOk = true;
-    int fontSize = APPLICATION->settings()->get("ConsoleFontSize").toInt(&conversionOk);
-    if(!conversionOk)
-    {
-        fontSize = 11;
-    }
-    ui->fontSizeBox->setValue(fontSize);
-    refreshFontPreview();
     ui->lineLimitSpinBox->setValue(s->get("ConsoleMaxLines").toInt());
     ui->checkStopLogging->setChecked(s->get("ConsoleOverflowStop").toBool());
 
@@ -326,6 +225,7 @@ void LauncherPage::loadSettings()
     ui->instDirTextBox->setText(s->get("InstanceDir").toString());
     ui->modsDirTextBox->setText(s->get("CentralModsDir").toString());
     ui->iconsDirTextBox->setText(s->get("IconsDir").toString());
+    ui->skinsDirTextBox->setText(s->get("SkinsDir").toString());
 
     QString sortMode = s->get("InstSortMode").toString();
 
@@ -336,46 +236,5 @@ void LauncherPage::loadSettings()
     else
     {
         ui->sortByNameBtn->setChecked(true);
-    }
-
-    // Analytics
-    if(!BuildConfig.ANALYTICS_ID.isEmpty())
-    {
-        ui->analyticsCheck->setChecked(s->get("Analytics").toBool());
-    }
-}
-
-void LauncherPage::refreshFontPreview()
-{
-    int fontSize = ui->fontSizeBox->value();
-    QString fontFamily = ui->consoleFont->currentFont().family();
-    ui->fontPreview->clear();
-    defaultFormat->setFont(QFont(fontFamily, fontSize));
-    {
-        QTextCharFormat format(*defaultFormat);
-        format.setForeground(m_colors->getFront(MessageLevel::Error));
-        // append a paragraph/line
-        auto workCursor = ui->fontPreview->textCursor();
-        workCursor.movePosition(QTextCursor::End);
-        workCursor.insertText(tr("[Something/ERROR] A spooky error!"), format);
-        workCursor.insertBlock();
-    }
-    {
-        QTextCharFormat format(*defaultFormat);
-        format.setForeground(m_colors->getFront(MessageLevel::Message));
-        // append a paragraph/line
-        auto workCursor = ui->fontPreview->textCursor();
-        workCursor.movePosition(QTextCursor::End);
-        workCursor.insertText(tr("[Test/INFO] A harmless message..."), format);
-        workCursor.insertBlock();
-    }
-    {
-        QTextCharFormat format(*defaultFormat);
-        format.setForeground(m_colors->getFront(MessageLevel::Warning));
-        // append a paragraph/line
-        auto workCursor = ui->fontPreview->textCursor();
-        workCursor.movePosition(QTextCursor::End);
-        workCursor.insertText(tr("[Something/WARN] A not so spooky warning."), format);
-        workCursor.insertBlock();
     }
 }

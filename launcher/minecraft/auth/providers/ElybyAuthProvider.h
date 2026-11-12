@@ -1,46 +1,40 @@
 #pragma once
 
-#include <QObject>
-#include "QObjectPtr.h"
-#include <QDateTime>
-#include <QSet>
-#include <QProcess>
-#include <QDebug>
-
 #include "BaseAuthProvider.h"
 
+/*!
+ * Ely.by accounts. Ely.by runs its own authentication server (the same protocol the old Mojang
+ * accounts used), and the game is pointed at it with the authlib injector.
+ */
 class ElybyAuthProvider : public BaseAuthProvider
 {
     Q_OBJECT
 
 public:
-    QString id()
+    QString id() override
     {
         return "elyby";
     }
 
-    QString displayName()
+    QString displayName() override
     {
         return "Ely.by";
     };
 
-    QString injectorEndpoint()
+    QString injectorEndpoint() override
     {
         return "ely.by";
     };
 
-    QString authEndpoint()
+    QString authEndpoint() override
     {
         return "https://authserver.ely.by/auth/";
     };
 
-    QUrl resolveSkinUrl(QString id, QString name)
+    QUrl resolveSkinUrl(QString id, QString name) override
     {
         return QUrl(((QString) "http://skinsystem.ely.by/skins/%1.png").arg(name));
     }
 
-    virtual bool useYggdrasil()
-    {
-        return true;
-    }
+    shared_qobject_ptr<AccountTask> createRefreshTask(AccountData* data) override;
 };

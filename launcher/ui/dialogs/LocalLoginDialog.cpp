@@ -28,7 +28,6 @@ void LocalLoginDialog::accept()
     ui->progressBar->setVisible(true);
 
     m_account = MinecraftAccount::createLocal(ui->userTextBox->text());
-    m_account->setProvider(AuthProviders::lookup("local"));
 
     // Setup the login task and start it
     m_loginTask = m_account->loginLocal();

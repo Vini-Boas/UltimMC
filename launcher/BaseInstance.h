@@ -20,6 +20,7 @@
 #include <QObject>
 #include "QObjectPtr.h"
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QSet>
 #include <QProcess>
 
@@ -85,6 +86,8 @@ public:
 
     void setRunning(bool running);
     bool isRunning() const;
+    /// Stop counting play time and save it. The instance can still be running (post-exit command).
+    void recordTimePlayed();
     int64_t totalTimePlayed() const;
     int64_t lastTimePlayed() const;
     void resetTimePlayed();
@@ -189,8 +192,6 @@ public:
     /// get variables this instance exports
     virtual QMap<QString, QString> getVariables() const = 0;
 
-    virtual QString typeName() const = 0;
-
     bool hasVersionBroken() const
     {
         return m_hasBrokenVersion;
@@ -270,7 +271,8 @@ protected: /* data */
     // InstanceFlags m_flags;
     bool m_isRunning = false;
     shared_qobject_ptr<LaunchTask> m_launchProcess;
-    QDateTime m_timeStarted;
+    QElapsedTimer m_timeStarted; // monotonic: changing the system clock or timezone doesn't affect it
+    bool m_countingTime = false;
 
 private: /* data */
     Status m_status = Status::Present;

@@ -1,23 +1,30 @@
 #pragma once
 
 #include <QObject>
-#include "QObjectPtr.h"
-#include <QDateTime>
-#include <QSet>
-#include <QProcess>
+#include <QString>
 #include <QUrl>
+#include <memory>
+#include "QObjectPtr.h"
+
 #include "../../../AuthServer.h"
 
+class AccountTask;
+struct AccountData;
 class BaseAuthProvider;
+
 typedef std::shared_ptr<BaseAuthProvider> AuthProviderPtr;
 
 /*!
- * \brief Base class for auth provider.
- * This class implements many functions that are common between providers and
- * provides a standard interface for all providers.
+ * \brief Everything that differs between kinds of accounts lives behind this interface.
  *
- * To create a new provider, create a new class inheriting from this class,
- * implement the pure virtual functions, and
+ * A provider answers "how does an account of my kind authenticate?" so the rest of the
+ * launcher never has to branch on the account type. There is one provider per account
+ * type (see AccountType in AccountData.h): Microsoft, Local and Ely.by.
+ *
+ * To add a new kind of account:
+ *  - add a value to AccountType and handle it in AccountData::setType, ::saveState and ::resumeStateFromV3,
+ *  - subclass this class and implement the pure virtual functions,
+ *  - register the subclass in AuthProviders.cpp.
  */
 class BaseAuthProvider : public QObject
 {
@@ -26,44 +33,38 @@ class BaseAuthProvider : public QObject
 public:
     virtual ~BaseAuthProvider(){};
 
-    // Unique id for provider
-    virtual QString id()
-    {
-        return "base";
-    };
+    //! Unique id of the provider. Used to look it up in AuthProviders.
+    virtual QString id() = 0;
 
-    // Name of provider that displayed in account selector and list
-    virtual QString displayName()
-    {
-        return "Base";
-    };
+    //! Name shown in the launcher's account list.
+    virtual QString displayName() = 0;
 
-    // Endpoint for authlib injector (use empty if authlib injector isn't required)
+    /*!
+     * Creates the task that refreshes (re-validates) an account of this kind.
+     * The task works on the given data, which stays owned by the account.
+     */
+    virtual shared_qobject_ptr<AccountTask> createRefreshTask(AccountData* data) = 0;
+
+    //! Server for the authlib injector to talk to. Empty if the game needs no injector (vanilla MSA).
     virtual QString injectorEndpoint()
     {
         return "";
     };
 
-    // Endpoint for authentication
+    //! Endpoint of the authentication server, for providers that talk to one.
     virtual QString authEndpoint()
     {
         return "";
     };
 
-    // Function to get url of skin to display in launcher
+    //! Url of the skin to display in the launcher
     virtual QUrl resolveSkinUrl(QString id, QString name)
     {
         return QUrl(((QString) "https://crafatar.com/skins/%1.png").arg(id));
     };
 
-    // Can change skin (currently only mojang support)
+    //! Whether the launcher can change the skin of these accounts (only Microsoft ones)
     virtual bool canChangeSkin()
-    {
-        return false;
-    }
-
-    // Use legacy yggdrasil auth, (get profile from refresh and login)
-    virtual bool useYggdrasil()
     {
         return false;
     }

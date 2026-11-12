@@ -8,7 +8,7 @@
 #include "BuildConfig.h"
 #include "HoeDown.h"
 
-UpdateDialog::UpdateDialog(bool hasUpdate, QWidget *parent) : QDialog(parent), ui(new Ui::UpdateDialog)
+UpdateDialog::UpdateDialog(bool hasUpdate, QWidget *parent, const QString &target) : QDialog(parent), ui(new Ui::UpdateDialog), m_target(target)
 {
     ui->setupUi(this);
     if(hasUpdate)
@@ -30,11 +30,34 @@ UpdateDialog::~UpdateDialog()
 {
 }
 
+void UpdateDialog::offerVariantMove(const QString &text)
+{
+    ui->variantCheck->setText(text);
+    ui->variantCheck->setChecked(true);
+    ui->variantCheck->setVisible(true);
+}
+
+void UpdateDialog::announceVariantMove(const QString &text)
+{
+    ui->variantLabel->setText(text);
+    ui->variantLabel->setVisible(true);
+}
+
+bool UpdateDialog::variantMoveAccepted() const
+{
+    return ui->variantCheck->isChecked();
+}
+
 void UpdateDialog::loadChangelog()
 {
     dljob = new NetJob("Changelog", APPLICATION->network());
     QString url;
     url = QString("https://api.github.com/repos/MultiMC/Launcher/compare/%1...develop").arg(BuildConfig.GIT_COMMIT);
+    if(m_target != "develop")
+    {
+        // updater v2 offers builds of any tier: compare with the one offered
+        url = QString("https://api.github.com/repos/MultiMC/Launcher/compare/%1...%2").arg(BuildConfig.GIT_COMMIT, m_target);
+    }
     m_changelogType = CHANGELOG_COMMITS;
     dljob->addNetAction(Net::Download::makeByteArray(QUrl(url), &changelogData));
     connect(dljob.get(), &NetJob::succeeded, this, &UpdateDialog::changelogLoaded);

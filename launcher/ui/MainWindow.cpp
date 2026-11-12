@@ -54,15 +54,18 @@
 #include <java/JavaInstallList.h>
 #include <launch/LaunchTask.h>
 #include <minecraft/auth/AccountList.h>
-#include <SkinUtils.h>
 #include <BuildConfig.h>
 #include <net/NetJob.h>
 #include <net/Download.h>
 #include <news/NewsChecker.h>
 #include <notifications/NotificationChecker.h>
 #include <tools/BaseProfiler.h>
-#include <updater/DownloadTask.h>
-#include <updater/UpdateChecker.h>
+#include <updater/v1/DownloadTask.h>
+#include <updater/v1/UpdateChecker.h>
+#include <updater/v2/Checker.h>
+#include <updater/v2/CheckHistory.h>
+#include <updater/v2/DownloadTask.h>
+#include <updater/v2/InstallController.h>
 #include <DesktopServices.h>
 #include "InstanceWindow.h"
 #include "InstancePageProvider.h"
@@ -81,13 +84,12 @@
 #include "ui/dialogs/IconPickerDialog.h"
 #include "ui/dialogs/CopyInstanceDialog.h"
 #include "ui/dialogs/UpdateDialog.h"
-#include "ui/dialogs/EditAccountDialog.h"
 #include "ui/dialogs/NotificationDialog.h"
 #include "ui/dialogs/CreateShortcutDialog.h"
 #include "ui/dialogs/ExportInstanceDialog.h"
 #include "ui/dialogs/ModrinthExportDialog.h"
 
-#include "UpdateController.h"
+#include "updater/v1/UpdateController.h"
 #include "KonamiCode.h"
 
 #include "InstanceImportTask.h"
@@ -96,15 +98,39 @@
 #include "MMCTime.h"
 
 namespace {
-QString profileInUseFilter(const QString & profile, bool used)
+// a variant's name from the tier's build or the installed one; its ID when neither has it
+QString variantName(const UpdaterV2::CheckResult &result, const QString &id)
 {
+    for(auto &v: result.runnable)
+    {
+        if(v.id == id)
+        {
+            return v.name;
+        }
+    }
+    if(result.haveCurrent && result.current.id == id)
+    {
+        return result.current.name;
+    }
+    return id;
+}
+
+QString profileInUseFilter(const QString& profileName, const QString& accountName, bool used)
+{
+    QString displayString;
+    if(profileName.size() == 0) {
+        displayString = QObject::tr("No profile (%1)").arg(accountName);
+    }
+    else {
+        displayString = profileName;
+    }
     if(used)
     {
-        return QObject::tr("%1 (in use)").arg(profile);
+        return QObject::tr("%1 (in use)").arg(displayString);
     }
     else
     {
-        return profile;
+        return displayString;
     }
 }
 }
@@ -314,6 +340,7 @@ public:
         foldersMenu->addAction(actionViewCentralModsFolder);
 
         foldersMenuButton = TranslatedToolButton(MainWindow);
+        foldersMenuButton->setObjectName(QStringLiteral("foldersMenuButton"));
         foldersMenuButton.setTextId(QT_TRANSLATE_NOOP("MainWindow", "Folders"));
         foldersMenuButton.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "Open one of the folders shared between instances."));
         foldersMenuButton->setMenu(foldersMenu);
@@ -378,6 +405,7 @@ public:
         helpMenu->addAction(actionAbout);
 
         helpMenuButton = TranslatedToolButton(MainWindow);
+        helpMenuButton->setObjectName(QStringLiteral("helpMenuButton"));
         helpMenuButton.setTextId(QT_TRANSLATE_NOOP("MainWindow", "Help"));
         helpMenuButton.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "Get help with %1 or Minecraft."));
         helpMenuButton->setMenu(helpMenu);
@@ -403,13 +431,16 @@ public:
 
         mainToolBar->addSeparator();
 
-        actionPatreon = TranslatedAction(MainWindow);
-        actionPatreon->setObjectName(QStringLiteral("actionPatreon"));
-        actionPatreon->setIcon(APPLICATION->getThemedIcon("patreon"));
-        actionPatreon.setTextId(QT_TRANSLATE_NOOP("MainWindow", "Support %1"));
-        actionPatreon.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "Open the %1 Patreon page."));
-        all_actions.append(&actionPatreon);
-        mainToolBar->addAction(actionPatreon);
+        if (!BuildConfig.PATREON_URL.isEmpty())
+        {
+            actionPatreon = TranslatedAction(MainWindow);
+            actionPatreon->setObjectName(QStringLiteral("actionPatreon"));
+            actionPatreon->setIcon(APPLICATION->getThemedIcon("patreon"));
+            actionPatreon.setTextId(QT_TRANSLATE_NOOP("MainWindow", "Support %1"));
+            actionPatreon.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "Open the %1 Patreon page."));
+            all_actions.append(&actionPatreon);
+            mainToolBar->addAction(actionPatreon);
+        }
 
         actionCAT = TranslatedAction(MainWindow);
         actionCAT->setObjectName(QStringLiteral("actionCAT"));
@@ -478,7 +509,7 @@ public:
         // NOTE: not added to toolbar, but used for instance context menu (right click)
         actionChangeInstIcon = TranslatedAction(MainWindow);
         actionChangeInstIcon->setObjectName(QStringLiteral("actionChangeInstIcon"));
-        actionChangeInstIcon->setIcon(QIcon(":/icons/instances/grass"));
+        actionChangeInstIcon->setIcon(QIcon(":/logo.svg"));
         actionChangeInstIcon->setIconVisibleInMenu(true);
         actionChangeInstIcon.setTextId(QT_TRANSLATE_NOOP("MainWindow", "Change Icon"));
         actionChangeInstIcon.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "Change the selected instance's icon."));
@@ -504,6 +535,13 @@ public:
         renameButton->setToolTip(actionRenameInstance->toolTip());
         renameButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         instanceToolBar->addWidget(renameButton);
+
+        actionChangeInstGroup = TranslatedAction(MainWindow);
+        actionChangeInstGroup->setObjectName(QStringLiteral("actionChangeInstGroup"));
+        actionChangeInstGroup.setTextId(QT_TRANSLATE_NOOP("MainWindow", "Change Group"));
+        actionChangeInstGroup.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "Change the selected instance's group."));
+        all_actions.append(&actionChangeInstGroup);
+        instanceToolBar->addAction(actionChangeInstGroup);
 
         instanceToolBar->addSeparator();
 
@@ -555,13 +593,6 @@ public:
         actionScreenshots.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "View and upload screenshots for this instance."));
         all_actions.append(&actionScreenshots);
         instanceToolBar->addAction(actionScreenshots);
-
-        actionChangeInstGroup = TranslatedAction(MainWindow);
-        actionChangeInstGroup->setObjectName(QStringLiteral("actionChangeInstGroup"));
-        actionChangeInstGroup.setTextId(QT_TRANSLATE_NOOP("MainWindow", "Change Group"));
-        actionChangeInstGroup.setTooltipId(QT_TRANSLATE_NOOP("MainWindow", "Change the selected instance's group."));
-        all_actions.append(&actionChangeInstGroup);
-        instanceToolBar->addAction(actionChangeInstGroup);
 
         instanceToolBar->addSeparator();
 
@@ -665,12 +696,6 @@ public:
 
     void retranslateUi(QMainWindow *MainWindow)
     {
-        QString winTitle = tr("%1 - Version %2", "Launcher - Version X").arg(BuildConfig.LAUNCHER_DISPLAYNAME, BuildConfig.printableVersionString());
-        if (!BuildConfig.BUILD_PLATFORM.isEmpty())
-        {
-            winTitle += tr(" on %1", "on platform, as in operating system").arg(BuildConfig.BUILD_PLATFORM);
-        }
-        MainWindow->setWindowTitle(winTitle);
         // all the actions
         for(auto * item: all_actions)
         {
@@ -714,6 +739,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new MainWindow
     {
         m_newsChecker.reset(new NewsChecker(APPLICATION->network(), BuildConfig.NEWS_RSS_URL));
         newsLabel = new QToolButton();
+        newsLabel->setObjectName(QStringLiteral("newsLabel"));
         newsLabel->setIcon(APPLICATION->getThemedIcon("news"));
         newsLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         newsLabel->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -727,6 +753,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new MainWindow
     // Create the instance list widget
     {
         view = new InstanceView(ui->centralWidget);
+        view->setObjectName(QStringLiteral("instanceView"));
 
         view->setSelectionMode(QAbstractItemView::SingleSelection);
         // FIXME: leaks ListViewDelegate
@@ -779,9 +806,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new MainWindow
     connect(APPLICATION, &Application::globalSettingsClosed, this, &MainWindow::globalSettingsClosed);
 
     m_statusLeft = new QLabel(tr("No instance selected"), this);
+    m_statusLeft->setObjectName(QStringLiteral("statusLeft"));
     m_statusCenter = new QLabel(tr("Total playtime: 0s"), this);
+    m_statusCenter->setObjectName(QStringLiteral("statusCenter"));
     statusBar()->addPermanentWidget(m_statusLeft, 1);
     statusBar()->addPermanentWidget(m_statusCenter, 0);
+    QFrame *vSeparator = new QFrame(this);
+    vSeparator->setFrameShape(QFrame::VLine);
+    vSeparator->setFrameShadow(QFrame::Sunken);
+    statusBar()->addPermanentWidget(vSeparator, 0);
+    QString versionText = BuildConfig.printableVersionString();
+    if (!BuildConfig.BUILD_PLATFORM.isEmpty())
+    {
+        versionText += " " + BuildConfig.BUILD_PLATFORM;
+    }
+    m_statusVersion = new QLabel(versionText, this);
+    m_statusVersion->setObjectName(QStringLiteral("statusVersion"));
+    m_statusVersion->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    statusBar()->addPermanentWidget(m_statusVersion, 0);
 
     // Add "manage accounts" button, right align
     QWidget *spacer = new QWidget();
@@ -793,6 +835,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new MainWindow
     repopulateAccountsMenu();
 
     accountMenuButton = new QToolButton(this);
+    accountMenuButton->setObjectName(QStringLiteral("accountMenuButton"));
     accountMenuButton->setMenu(accountMenu);
     accountMenuButton->setPopupMode(QToolButton::InstantPopup);
     accountMenuButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -803,30 +846,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new MainWindow
 
     ui->mainToolBar->addAction(accountMenuButtonAction);
 
-    // Update the menu when the active account changes.
-    // Shouldn't have to use lambdas here like this, but if I don't, the compiler throws a fit.
-    // Template hell sucks...
-    connect(
-        APPLICATION->accounts().get(),
-        &AccountList::defaultAccountChanged,
-        [this] {
-            defaultAccountChanged();
-        }
-    );
-    connect(
-        APPLICATION->accounts().get(),
-        &AccountList::listChanged,
-        [this]
+    // Tool bars make the buttons for their actions: name them after the actions, so custom
+    // themes' stylesheets can pick them out (QToolButton#actionLaunchInstance)
+    for(QToolBar *toolBar: QList<QToolBar *>{ui->mainToolBar, ui->instanceToolBar, ui->newsToolBar})
+    {
+        for(QAction *action: toolBar->actions())
         {
-            repopulateAccountsMenu();
+            QWidget *button = toolBar->widgetForAction(action);
+            if(button && button->objectName().isEmpty() && !action->objectName().isEmpty())
+            {
+                button->setObjectName(action->objectName());
+            }
         }
-    );
+    }
+
+    // Update the menu when the active account changes.
+    connect(APPLICATION->accounts().get(), &AccountList::defaultAccountChanged, this, &MainWindow::defaultAccountChanged);
+    connect(APPLICATION->accounts().get(), &AccountList::listChanged, this, &MainWindow::repopulateAccountsMenu);
 
     // Show initial account
     defaultAccountChanged();
-
-    // TODO: refresh accounts here?
-    // auto accounts = APPLICATION->accounts();
 
     // load the news
     {
@@ -837,20 +876,22 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new MainWindow
 
     if(BuildConfig.UPDATER_ENABLED)
     {
-        bool updatesAllowed = APPLICATION->updatesAreAllowed();
-        updatesAllowedChanged(updatesAllowed);
+        updatesAllowedChanged(APPLICATION->updatesAreAllowed());
 
         // NOTE: calling the operator like that is an ugly hack to appease ancient gcc...
         connect(ui->actionCheckUpdate.operator->(), &QAction::triggered, this, &MainWindow::checkForUpdates);
 
-        // set up the updater object.
-        auto updater = APPLICATION->updateChecker();
-        connect(updater.get(), &UpdateChecker::updateAvailable, this, &MainWindow::updateAvailable);
-        connect(updater.get(), &UpdateChecker::noUpdateFound, this, &MainWindow::updateNotAvailable);
-        // if automatic update checks are allowed, start one.
-        if (APPLICATION->settings()->get("AutoUpdate").toBool() && updatesAllowed)
+        if(BuildConfig.UPDATER_VERSION == 2)
         {
-            updater->checkForUpdate(false);
+            auto updater = APPLICATION->updaterV2();
+            connect(updater.get(), &UpdaterV2::Checker::finished, this, &MainWindow::updateCheckedV2);
+        }
+        else
+        {
+            // set up the updater object.
+            auto updater = APPLICATION->updateChecker();
+            connect(updater.get(), &UpdaterV1::UpdateChecker::updateAvailable, this, &MainWindow::updateAvailable);
+            connect(updater.get(), &UpdaterV1::UpdateChecker::noUpdateFound, this, &MainWindow::updateNotAvailable);
         }
     }
 
@@ -877,11 +918,11 @@ void MainWindow::retranslateUi()
     auto accounts = APPLICATION->accounts();
     MinecraftAccountPtr defaultAccount = accounts->defaultAccount();
     if(defaultAccount) {
-        auto profileLabel = profileInUseFilter(defaultAccount->profileName(), defaultAccount->isInUse());
+        auto profileLabel = profileInUseFilter(defaultAccount->profileName(), defaultAccount->gamerTag(), defaultAccount->isInUse());
         accountMenuButton->setText(profileLabel);
     }
     else {
-        accountMenuButton->setText(tr("Profiles"));
+        accountMenuButton->setText(tr("Accounts"));
     }
 
     if (m_selectedInstance) {
@@ -973,10 +1014,25 @@ void MainWindow::showInstanceContextMenu(const QPoint &pos)
     myMenu.exec(view->mapToGlobal(pos));
 }
 
+namespace {
+// Stylesheets can style tool buttons by popup mode (QToolButton[popupMode="1"]: room for the
+// menu part), but Qt reads such properties only when it polishes a widget: one changed later
+// kept the old look, the menu part over the text
+void setPopupMode(QToolButton *button, QToolButton::ToolButtonPopupMode mode)
+{
+    if (button->popupMode() == mode)
+        return;
+    button->setPopupMode(mode);
+    button->style()->unpolish(button);
+    button->style()->polish(button);
+    button->updateGeometry();
+}
+}
+
 void MainWindow::updateToolsMenu()
 {
     QToolButton *exportButton = dynamic_cast<QToolButton*>(ui->instanceToolBar->widgetForAction(ui->actionExportInstance));
-    exportButton->setPopupMode(QToolButton::MenuButtonPopup);
+    setPopupMode(exportButton, QToolButton::MenuButtonPopup);
 
     QMenu *exportMenu = ui->actionExportInstance->menu();
 
@@ -1009,15 +1065,15 @@ void MainWindow::updateToolsMenu()
     {
         ui->actionLaunchInstance->setMenu(nullptr);
         ui->actionLaunchInstanceOffline->setMenu(nullptr);
-        launchButton->setPopupMode(QToolButton::InstantPopup);
-        launchOfflineButton->setPopupMode(QToolButton::InstantPopup);
+        setPopupMode(launchButton, QToolButton::InstantPopup);
+        setPopupMode(launchOfflineButton, QToolButton::InstantPopup);
         return;
     }
 
     QMenu *launchMenu = ui->actionLaunchInstance->menu();
     QMenu *launchOfflineMenu = ui->actionLaunchInstanceOffline->menu();
-    launchButton->setPopupMode(QToolButton::MenuButtonPopup);
-    launchOfflineButton->setPopupMode(QToolButton::MenuButtonPopup);
+    setPopupMode(launchButton, QToolButton::MenuButtonPopup);
+    setPopupMode(launchOfflineButton, QToolButton::MenuButtonPopup);
     if (launchMenu)
     {
         launchMenu->clear();
@@ -1089,7 +1145,7 @@ void MainWindow::repopulateAccountsMenu()
         // this can be called before accountMenuButton exists
         if (accountMenuButton)
         {
-            auto profileLabel = profileInUseFilter(defaultAccount->profileName(), defaultAccount->isInUse());
+            auto profileLabel = profileInUseFilter(defaultAccount->profileName(), defaultAccount->gamerTag(), defaultAccount->isInUse());
             accountMenuButton->setText(profileLabel);
         }
     }
@@ -1105,8 +1161,14 @@ void MainWindow::repopulateAccountsMenu()
         // TODO: Nicer way to iterate?
         for (int i = 0; i < accounts->count(); i++)
         {
-            MinecraftAccountPtr account = accounts->at(i);
-            auto profileLabel = profileInUseFilter(account->profileName(), account->isInUse());
+            auto entry = accounts->at(i);
+            if(!entry.isAccount)
+            {
+                continue;
+            }
+            auto account = entry.account;
+
+            auto profileLabel = profileInUseFilter(account->profileName(), account->gamerTag(), account->isInUse());
             QAction *action = new QAction(profileLabel, this);
             action->setData(i);
             action->setCheckable(true);
@@ -1171,7 +1233,7 @@ void MainWindow::changeActiveAccount()
         index = -1;
     }
     auto accounts = APPLICATION->accounts();
-    accounts->setDefaultAccount(index == -1 ? nullptr : accounts->at(index));
+    accounts->setDefaultAccount(index == -1 ? nullptr : accounts->at(index).account);
     defaultAccountChanged();
 }
 
@@ -1181,24 +1243,22 @@ void MainWindow::defaultAccountChanged()
 
     MinecraftAccountPtr account = APPLICATION->accounts()->defaultAccount();
 
-    // FIXME: this needs adjustment for MSA
-    if (account && account->profileName() != "")
+    if (!account)
     {
-        auto profileLabel = profileInUseFilter(account->profileName(), account->isInUse());
-        accountMenuButton->setText(profileLabel);
-        auto face = account->getFace();
-        if(face.isNull()) {
-            accountMenuButton->setIcon(APPLICATION->getThemedIcon("noaccount"));
-        }
-        else {
-            accountMenuButton->setIcon(face);
-        }
+        accountMenuButton->setIcon(APPLICATION->getThemedIcon("noaccount"));
+        accountMenuButton->setText(tr("Accounts"));
         return;
     }
 
-    // Set the icon to the "no account" icon.
-    accountMenuButton->setIcon(APPLICATION->getThemedIcon("noaccount"));
-    accountMenuButton->setText(tr("Profiles"));
+    auto profileLabel = profileInUseFilter(account->profileName(), account->gamerTag(), account->isInUse());
+    accountMenuButton->setText(profileLabel);
+    auto face = account->getFace();
+    if(face.isNull()) {
+        accountMenuButton->setIcon(APPLICATION->getThemedIcon("noaccount"));
+    }
+    else {
+        accountMenuButton->setIcon(face);
+    }
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *ev)
@@ -1257,7 +1317,7 @@ void MainWindow::updateNewsLabel()
     }
 }
 
-void MainWindow::updateAvailable(GoUpdate::Status status)
+void MainWindow::updateAvailable(UpdaterV1::Status status)
 {
     if(!APPLICATION->updatesAreAllowed())
     {
@@ -1321,7 +1381,7 @@ void MainWindow::notificationsChanged()
     APPLICATION->settings()->set("ShownNotifications", intListToString(shownNotifications));
 }
 
-void MainWindow::downloadUpdates(GoUpdate::Status status)
+void MainWindow::downloadUpdates(UpdaterV1::Status status)
 {
     if(!APPLICATION->updatesAreAllowed())
     {
@@ -1336,7 +1396,7 @@ void MainWindow::downloadUpdates(GoUpdate::Status status)
     {
         CustomMessageBox::selectable(this, tr("Error"), tr("Couldn't create folder for update downloads:\n%1").arg(dlPath), QMessageBox::Warning)->show();
     }
-    GoUpdate::DownloadTask updateTask(APPLICATION->network(), status, dlPath, &updateDlg);
+    UpdaterV1::DownloadTask updateTask(APPLICATION->network(), status, dlPath, &updateDlg);
     // If the task succeeds, install the updates.
     if (updateDlg.execWithTask(&updateTask))
     {
@@ -1345,7 +1405,250 @@ void MainWindow::downloadUpdates(GoUpdate::Status status)
          * or the update fails (and the control leaves this scope).
          */
         APPLICATION->updateIsRunning(true);
-        UpdateController update(this, APPLICATION->root(), updateTask.updateFilesDir(), updateTask.operations());
+        UpdaterV1::UpdateController update(this, APPLICATION->root(), updateTask.updateFilesDir(), updateTask.operations());
+        update.installUpdates();
+        APPLICATION->updateIsRunning(false);
+    }
+    else
+    {
+        CustomMessageBox::selectable(this, tr("Error"), updateTask.failReason(), QMessageBox::Warning)->show();
+    }
+}
+
+UpdaterV2::Tier MainWindow::updateTier()
+{
+    UpdaterV2::Tier tier = UpdaterV2::Tier::Stable;
+    UpdaterV2::parseTier(APPLICATION->settings()->get("UpdateTier").toString(), tier);
+    return tier;
+}
+
+void MainWindow::updateCheckedV2(const UpdaterV2::CheckResult &result)
+{
+    using UpdaterV2::CheckResult;
+    auto tierName = UpdaterV2::tierName(result.tier);
+    auto details = result.messages.join("\n");
+    auto settings = APPLICATION->settings();
+
+    // Every check counts, asked for or not, shown or not: whether checks still get a verified
+    // answer at all. When they haven't for weeks, the user is told even about an automatic
+    // check, since this installation may never update again on its own.
+    UpdaterV2::CheckHistory history;
+    history.lastSuccess = settings->get("UpdateLastSuccess").toLongLong();
+    history.failingSince = settings->get("UpdateFailingSince").toLongLong();
+    history.failedChecks = settings->get("UpdateFailedChecks").toInt();
+    auto failingSince = history.failingSince;
+    bool checksKeepFailing = history.record(result.kind != CheckResult::Failed, QDateTime::currentMSecsSinceEpoch() / 1000);
+    settings->set("UpdateLastSuccess", history.lastSuccess);
+    settings->set("UpdateFailingSince", history.failingSince);
+    settings->set("UpdateFailedChecks", history.failedChecks);
+    switch(result.kind)
+    {
+        case CheckResult::Update:
+        {
+            if(!APPLICATION->updatesAreAllowed())
+            {
+                break;
+            }
+            UpdateDialog dlg(true, this, result.commit);
+            auto update = result;
+            bool canStay = false;
+            if(result.variant.id != result.ownVariant)
+            {
+                for(auto &v: result.runnable)
+                {
+                    if(v.id == result.ownVariant)
+                    {
+                        canStay = true;
+                        update.variant = v;
+                    }
+                }
+                if(canStay)
+                {
+                    dlg.offerVariantMove(tr("Switch to %1, which replaces %2").arg(result.variant.name, variantName(result, result.ownVariant)));
+                }
+                else
+                {
+                    dlg.announceVariantMove(tr("%1 isn't made for this computer any more, so this update switches to %2.")
+                                                .arg(variantName(result, result.ownVariant), result.variant.name));
+                }
+            }
+            auto answer = dlg.exec();
+            if(canStay && !dlg.variantMoveAccepted())
+            {
+                // the user objects to the move: this variant stays, until they change it in the settings
+                APPLICATION->settings()->set("UpdateVariant", result.ownVariant);
+            }
+            else
+            {
+                update.variant = result.variant;
+            }
+            if(answer == UPDATE_NOW)
+            {
+                if(result.ownVariantDropped && APPLICATION->settings()->get("UpdateVariant").toString() == result.ownVariant)
+                {
+                    // staying on it is no longer possible
+                    APPLICATION->settings()->set("UpdateVariant", QString());
+                }
+                downloadUpdateV2(update);
+            }
+            return;
+        }
+        case CheckResult::Switch:
+        {
+            if(!APPLICATION->updatesAreAllowed())
+            {
+                break;
+            }
+            auto own = variantName(result, result.ownVariant);
+            if(APPLICATION->settings()->get("UpdateVariant").toString().isEmpty())
+            {
+                // a move along `supersedes`: the user may object
+                QMessageBox box(QMessageBox::Question, tr("Switch version"),
+                                tr("%1 is available for this computer. It replaces %2, which this installation runs now.\n\n"
+                                   "Switch now? If you keep %2, you can switch later in Settings, Updates.").arg(result.variant.name, own),
+                                QMessageBox::NoButton, this);
+                auto now = box.addButton(tr("Switch now"), QMessageBox::AcceptRole);
+                auto keep = box.addButton(tr("Keep %1").arg(own), QMessageBox::DestructiveRole);
+                box.addButton(tr("Ask me later"), QMessageBox::RejectRole);
+                box.setDefaultButton(now);
+                box.exec();
+                if(box.clickedButton() == keep)
+                {
+                    APPLICATION->settings()->set("UpdateVariant", result.ownVariant);
+                }
+                else if(box.clickedButton() == now)
+                {
+                    downloadUpdateV2(result);
+                }
+                return;
+            }
+            // the user chose it in the settings
+            auto answer = CustomMessageBox::selectable(
+                this, tr("Switch version"), tr("Switch this installation from %1 to %2 now?").arg(own, result.variant.name),
+                QMessageBox::Question, QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes)->exec();
+            if(answer == QMessageBox::Yes)
+            {
+                downloadUpdateV2(result);
+            }
+            return;
+        }
+        case CheckResult::Downgrade:
+        {
+            if(!APPLICATION->updatesAreAllowed())
+            {
+                break;
+            }
+            auto answer = CustomMessageBox::selectable(
+                this, tr("Older build"),
+                tr("The %1 tier is on build %2, which is older than this build (%3).\n\n"
+                   "Going back is not always safe: newer builds may have changed how your data is stored, "
+                   "and an older build may not be able to read it. Make a backup of your instances first.\n\n"
+                   "Install build %2 anyway?").arg(tierName).arg(result.build).arg(result.currentBuild),
+                QMessageBox::Warning, QMessageBox::Yes | QMessageBox::No, QMessageBox::No)->exec();
+            if(answer == QMessageBox::Yes)
+            {
+                downloadUpdateV2(result);
+            }
+            return;
+        }
+        default:
+            break;
+    }
+    if(result.kind == CheckResult::NotForThisMachine && !result.notify && settings->get("UpdateNotPossibleBuild").toLongLong() != result.build)
+    {
+        // nothing more can be installed here: said once for each build, even when the user didn't ask
+        settings->set("UpdateNotPossibleBuild", result.build);
+    }
+    else if(!result.notify && !checksKeepFailing)
+    {
+        return;
+    }
+    switch(result.kind)
+    {
+        case CheckResult::NoUpdate:
+        case CheckResult::Update:
+        case CheckResult::Switch:
+        case CheckResult::Downgrade:
+            if(result.currentWithdrawn)
+            {
+                CustomMessageBox::selectable(this, tr("No updates"), details, QMessageBox::Information)->show();
+            }
+            else
+            {
+                updateNotAvailable();
+            }
+            break;
+        case CheckResult::BehindInstalled:
+            CustomMessageBox::selectable(
+                this, tr("No updates"),
+                tr("The %1 tier is on build %2, which is older than this build (%3). This build stays until there is a newer one.")
+                    .arg(tierName).arg(result.build).arg(result.currentBuild) + (details.isEmpty() ? QString() : "\n\n" + details),
+                QMessageBox::Information)->show();
+            break;
+        case CheckResult::NotForThisMachine:
+        {
+            auto text = tr("Build %1 is available, but it can't be installed here:").arg(result.build) + "\n\n" + details;
+            if(result.ownVariantDropped)
+            {
+                text = tr("Builds are no longer made of %1, the version this installation runs.").arg(variantName(result, result.ownVariant)) + "\n\n" + text;
+            }
+            CustomMessageBox::selectable(this, tr("Update not possible"), text, QMessageBox::Warning)->show();
+            break;
+        }
+        case CheckResult::Failed:
+        {
+            if(!checksKeepFailing)
+            {
+                CustomMessageBox::selectable(this, tr("Update check failed"), tr("Could not check for updates:") + "\n\n" + details, QMessageBox::Warning)->show();
+                break;
+            }
+            // not a passing problem any more: say since when, and where to get a build that works
+            auto date = [](qint64 seconds)
+            {
+                return QLocale().toString(QDateTime::fromMSecsSinceEpoch(seconds * 1000).date(), QLocale::LongFormat);
+            };
+            auto text = tr("%1 has not been able to check for updates since %2.").arg(BuildConfig.LAUNCHER_NAME, date(failingSince)) + " "
+                + (history.lastSuccess > 0 ? tr("The last check that worked was on %1.").arg(date(history.lastSuccess))
+                                           : tr("No check has worked on this installation yet."))
+                + "\n\n" + tr("The last attempt failed with:") + "\n\n" + details + "\n\n"
+                + tr("If this goes on, this installation may not be able to update itself any more. "
+                     "You can get the current version from %1.").arg(BuildConfig.WEBSITE_URL);
+            QMessageBox box(QMessageBox::Warning, tr("Updates are not working"), text, QMessageBox::NoButton, this);
+            box.setTextInteractionFlags(Qt::TextSelectableByMouse);
+            auto website = box.addButton(tr("Open the website"), QMessageBox::ActionRole);
+            box.addButton(QMessageBox::Close);
+            box.setDefaultButton(QMessageBox::Close);
+            box.exec();
+            if(box.clickedButton() == website)
+            {
+                DesktopServices::openUrl(QUrl(BuildConfig.WEBSITE_URL));
+            }
+            break;
+        }
+    }
+}
+
+void MainWindow::downloadUpdateV2(const UpdaterV2::CheckResult &result)
+{
+    if(!APPLICATION->updatesAreAllowed())
+    {
+        return;
+    }
+    qDebug() << "Downloading build" << result.build;
+    ProgressDialog updateDlg(this);
+
+    auto dlPath = FS::PathCombine(APPLICATION->root(), "update", "XXXXXX");
+    if (!FS::ensureFilePathExists(dlPath))
+    {
+        CustomMessageBox::selectable(this, tr("Error"), tr("Couldn't create folder for update downloads:\n%1").arg(dlPath), QMessageBox::Warning)->show();
+    }
+    UpdaterV2::DownloadTask updateTask(APPLICATION->network(), result, BuildConfig.FILES_MIRRORS.first(), APPLICATION->root(), dlPath, &updateDlg);
+    // If the task succeeds, install the updates.
+    if (updateDlg.execWithTask(&updateTask))
+    {
+        // as in downloadUpdates(): no launching instances until this process exits or the update fails
+        APPLICATION->updateIsRunning(true);
+        UpdaterV2::InstallController update(this, APPLICATION->root(), updateTask.stagingDir(), updateTask.changes());
         update.installUpdates();
         APPLICATION->updateIsRunning(false);
     }
@@ -1388,20 +1691,12 @@ void MainWindow::setCatBackground(bool enabled)
         else {
             cat = "kitteh";
         }
-        view->setStyleSheet(QString(R"(
-InstanceView
-{
-    background-image: url(:/backgrounds/%1);
-    background-attachment: fixed;
-    background-clip: padding;
-    background-position: top right;
-    background-repeat: none;
-    background-color:palette(base);
-})").arg(cat));
+        // standing on the bottom of the view, in the corner away from where instances start
+        view->setBackground(QPixmap(QString(":/backgrounds/%1").arg(cat)), Qt::AlignRight | Qt::AlignBottom, 8);
     }
     else
     {
-        view->setStyleSheet(QString());
+        view->setBackground(QPixmap());
     }
 }
 
@@ -1638,8 +1933,7 @@ void MainWindow::deleteGroup()
 
 void MainWindow::on_actionViewInstanceFolder_triggered()
 {
-    QString str = APPLICATION->settings()->get("InstanceDir").toString();
-    DesktopServices::openDirectory(str);
+    DesktopServices::openDirectory(APPLICATION->settings()->get("InstanceDir").toString());
 }
 
 void MainWindow::refreshInstances()
@@ -1649,7 +1943,7 @@ void MainWindow::refreshInstances()
 
 void MainWindow::on_actionViewCentralModsFolder_triggered()
 {
-    DesktopServices::openDirectory(APPLICATION->settings()->get("CentralModsDir").toString(), true);
+    DesktopServices::openDirectory(APPLICATION->settings()->get("CentralModsDir").toString());
 }
 
 void MainWindow::on_actionConfig_Folder_triggered()
@@ -1663,7 +1957,11 @@ void MainWindow::on_actionConfig_Folder_triggered()
 
 void MainWindow::checkForUpdates()
 {
-    if(BuildConfig.UPDATER_ENABLED)
+    if(BuildConfig.UPDATER_ENABLED && BuildConfig.UPDATER_VERSION == 2)
+    {
+        APPLICATION->updaterV2()->check(updateTier(), false, true);
+    }
+    else if(BuildConfig.UPDATER_ENABLED)
     {
         auto updater = APPLICATION->updateChecker();
         updater->checkForUpdate(true);
@@ -1722,7 +2020,7 @@ void MainWindow::on_actionScreenshots_triggered()
 
 void MainWindow::on_actionManageAccounts_triggered()
 {
-    APPLICATION->ShowGlobalSettings(this, "accounts");
+    APPLICATION->ShowAccountsDialog(this);
 }
 
 void MainWindow::on_actionReportBug_triggered()
@@ -1732,12 +2030,12 @@ void MainWindow::on_actionReportBug_triggered()
 
 void MainWindow::on_actionPatreon_triggered()
 {
-    DesktopServices::openUrl(QUrl("https://www.patreon.com/multimc"));
+    DesktopServices::openUrl(QUrl(BuildConfig.PATREON_URL));
 }
 
 void MainWindow::on_actionMoreNews_triggered()
 {
-    DesktopServices::openUrl(QUrl("https://multimc.org/posts.html"));
+    DesktopServices::openUrl(QUrl(BuildConfig.NEWS_URL));
 }
 
 void MainWindow::newsButtonClicked()
@@ -1749,7 +2047,7 @@ void MainWindow::newsButtonClicked()
     }
     else
     {
-        DesktopServices::openUrl(QUrl("https://multimc.org/posts.html"));
+        DesktopServices::openUrl(QUrl(BuildConfig.NEWS_URL));
     }
 }
 
@@ -1982,10 +2280,32 @@ void MainWindow::selectionBad()
     statusBar()->clearMessage();
     ui->instanceToolBar->setEnabled(false);
     ui->renameButton->setText(tr("Rename Instance"));
-    updateInstanceToolIcon("grass");
+    updateInstanceToolIcon("logo");
 
     // ...and then see if we can enable the previously selected instance
     setSelectedInstanceById(APPLICATION->settings()->get("SelectedInstance").toString());
+}
+
+void MainWindow::startupChecks()
+{
+    checkInstancePathForProblems();
+    autoCheckForUpdates();
+}
+
+void MainWindow::autoCheckForUpdates()
+{
+    if(!BuildConfig.UPDATER_ENABLED || !APPLICATION->updatesAreAllowed() || !APPLICATION->settings()->get("AutoUpdate").toBool())
+    {
+        return;
+    }
+    if(BuildConfig.UPDATER_VERSION == 2)
+    {
+        APPLICATION->updaterV2()->check(updateTier(), false, false);
+    }
+    else
+    {
+        APPLICATION->updateChecker()->checkForUpdate(false);
+    }
 }
 
 void MainWindow::checkInstancePathForProblems()
@@ -1994,6 +2314,7 @@ void MainWindow::checkInstancePathForProblems()
     if (FS::checkProblemticPathJava(QDir(instanceFolder)))
     {
         QMessageBox warning(this);
+        warning.setIcon(QMessageBox::Warning);
         warning.setText(tr("Your instance folder contains \'!\' and this is known to cause Java problems!"));
         warning.setInformativeText(
             tr(
@@ -2012,6 +2333,7 @@ void MainWindow::checkInstancePathForProblems()
     if (pathfoldername.contains("Rar$", Qt::CaseInsensitive))
     {
         QMessageBox warning(this);
+        warning.setIcon(QMessageBox::Warning);
         warning.setText(tr("Your instance folder contains \'Rar$\' - that means you haven't extracted the launcher archive!"));
         warning.setInformativeText(tempFolderText);
         warning.setDefaultButton(QMessageBox::Ok);
@@ -2020,6 +2342,7 @@ void MainWindow::checkInstancePathForProblems()
     else if (pathfoldername.startsWith(QDir::tempPath()) || pathfoldername.contains("/TempState/"))
     {
         QMessageBox warning(this);
+        warning.setIcon(QMessageBox::Warning);
         warning.setText(tr("Your instance folder is in a temporary folder: \'%1\'!").arg(QDir::tempPath()));
         warning.setInformativeText(tempFolderText);
         warning.setDefaultButton(QMessageBox::Ok);

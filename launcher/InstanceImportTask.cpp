@@ -34,6 +34,7 @@
 #include "icons/IconList.h"
 #include "Application.h"
 #include "net/ChecksumValidator.h"
+#include "net/SizeValidator.h"
 
 #include <algorithm>
 #include <iterator>
@@ -102,30 +103,37 @@ void InstanceImportTask::processZipPack()
 
     QStringList blacklist = {"instance.cfg", "manifest.json"};
     QString mmcFound = MMCZip::findFolderOfFileInZip(m_packZip.get(), "instance.cfg");
-    bool technicFound = QuaZipDir(m_packZip.get()).exists("/bin/modpack.jar") || QuaZipDir(m_packZip.get()).exists("/bin/version.json");
-    QString modrinthFound = MMCZip::findFolderOfFileInZip(m_packZip.get(), "modrinth.index.json");
+
     QString root;
-    if(!mmcFound.isNull())
+    if (!mmcFound.isNull())
     {
         // process as MultiMC instance/pack
         qDebug() << "MultiMC:" << mmcFound;
         root = mmcFound;
         m_modpackType = ModpackType::MultiMC;
     }
-    else if (technicFound)
-    {
-        // process as Technic pack
-        qDebug() << "Technic:" << technicFound;
-        extractDir.mkpath(".minecraft");
-        extractDir.cd(".minecraft");
-        m_modpackType = ModpackType::Technic;
+    if (m_modpackType == ModpackType::Unknown) {
+        bool technicFound = QuaZipDir(m_packZip.get()).exists("/bin/modpack.jar") || QuaZipDir(m_packZip.get()).exists("/bin/version.json");
+        if (technicFound)
+        {
+            // process as Technic pack
+            qDebug() << "Technic:" << technicFound;
+            extractDir.mkpath(".minecraft");
+            extractDir.cd(".minecraft");
+            m_modpackType = ModpackType::Technic;
+        }
     }
-    else if(!modrinthFound.isNull())
+    if (m_modpackType == ModpackType::Unknown)
     {
-        // process as Modrinth pack
-        qDebug() << "Modrinth:" << modrinthFound;
-        root = modrinthFound;
-        m_modpackType = ModpackType::Modrinth;
+        QString modrinthFound = MMCZip::findFolderOfFileInZip(m_packZip.get(), "modrinth.index.json");
+
+        if(!modrinthFound.isNull())
+        {
+            // process as Modrinth pack
+            qDebug() << "Modrinth:" << modrinthFound;
+            root = modrinthFound;
+            m_modpackType = ModpackType::Modrinth;
+        }
     }
     if(m_modpackType == ModpackType::Unknown)
     {
@@ -355,6 +363,10 @@ void InstanceImportTask::processModrinth() {
                 }
                 file.hash = QByteArray::fromHex(hash.toLatin1());
                 file.hashAlgorithm = hashAlgorithm;
+                if (obj.contains("fileSize"))
+                {
+                    file.size = Json::requireBoundedInteger(obj, "fileSize", 0, Json::MaxExactInteger);
+                }
                 // Do not use requireUrl, which uses StrictMode, instead use QUrl's default TolerantMode (as Modrinth seems to incorrectly handle spaces)
                 file.download = Json::requireValueString(Json::ensureArray(obj, "downloads").first(), "Download URL for " + file.path);
                 if (!file.download.isValid())
@@ -468,6 +480,10 @@ void InstanceImportTask::processModrinth() {
         qDebug() << "Will download" << file.download << "to" << path;
         auto dl = Net::Download::makeFile(file.download, path);
         dl->addValidator(new Net::ChecksumValidator(file.hashAlgorithm, file.hash));
+        if (file.size >= 0)
+        {
+            dl->addValidator(new Net::SizeValidator(file.size));
+        }
         m_filesNetJob->addNetAction(dl);
     }
     connect(m_filesNetJob.get(), &NetJob::succeeded, this, [&]()

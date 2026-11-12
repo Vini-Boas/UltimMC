@@ -19,18 +19,32 @@ Config::Config()
     // Version information
     VERSION_MAJOR = @Launcher_VERSION_MAJOR@;
     VERSION_MINOR = @Launcher_VERSION_MINOR@;
-    VERSION_HOTFIX = @Launcher_VERSION_HOTFIX@;
     VERSION_BUILD = @Launcher_VERSION_BUILD@;
 
     BUILD_PLATFORM = "@Launcher_BUILD_PLATFORM@";
-    UPDATER_BASE = "@Launcher_UPDATER_BASE@";
-    ANALYTICS_ID = "@Launcher_ANALYTICS_ID@";
-    NOTIFICATION_URL = "@Launcher_NOTIFICATION_URL@";
+    FILES_MIRRORS = QStringList{@Launcher_FILES_MIRRORS_LITERALS@};
+    META_MIRRORS = QStringList{@Launcher_META_MIRRORS_LITERALS@};
+    UPDATER_BASE = FILES_MIRRORS.first() + "update/";
+    NOTIFICATION_URL = FILES_MIRRORS.first() + "notifications.json";
+    TRANSLATIONS_BASE_URL = FILES_MIRRORS.first() + "translations/";
+    FMLLIBS_BASE_URL = FILES_MIRRORS.first() + "fmllibs/";
+    PATRONS_URL = FILES_MIRRORS.first() + "patrons.txt";
+    META_URL = META_MIRRORS.first() + "v1/";
     FULL_VERSION_STR = "@Launcher_VERSION_MAJOR@.@Launcher_VERSION_MINOR@.@Launcher_VERSION_BUILD@";
+
+    UPDATER_VERSION = @Launcher_UPDATER_VERSION@;
+    UPDATER_ROOT_KEYS = QStringList{@Launcher_UPDATER_ROOT_KEYS_LITERALS@};
+    static const char keysFloor[] = "@Launcher_UPDATER_KEYS_FLOOR_BYTES@";
+    UPDATER_KEYS_FLOOR = QByteArray(keysFloor, sizeof(keysFloor) - 1);
+    UPDATER_SERIAL_FLOOR = @Launcher_UPDATER_SERIAL_FLOOR@;
+    UPDATER_VARIANT = "@Launcher_UPDATER_VARIANT@";
+    bool updaterConfigured = UPDATER_VERSION == 2
+        ? !UPDATER_ROOT_KEYS.isEmpty() && !UPDATER_KEYS_FLOOR.isEmpty() && !UPDATER_VARIANT.isEmpty()
+        : !UPDATER_BASE.isEmpty();
 
     GIT_COMMIT = "@Launcher_GIT_COMMIT@";
     GIT_REFSPEC = "@Launcher_GIT_REFSPEC@";
-    if(GIT_REFSPEC.startsWith("refs/heads/") && !UPDATER_BASE.isEmpty() && !BUILD_PLATFORM.isEmpty() && VERSION_BUILD >= 0)
+    if(GIT_REFSPEC.startsWith("refs/heads/") && updaterConfigured && !BUILD_PLATFORM.isEmpty() && VERSION_BUILD >= 0)
     {
         VERSION_CHANNEL = GIT_REFSPEC;
         VERSION_CHANNEL.remove("refs/heads/");
@@ -42,31 +56,27 @@ Config::Config()
     }
 
     VERSION_STR = "@Launcher_VERSION_STRING@";
+    NEWS_URL = "@Launcher_NEWS_URL@";
     NEWS_RSS_URL = "@Launcher_NEWS_RSS_URL@";
     PASTE_EE_KEY = "@Launcher_PASTE_EE_API_KEY@";
-    IMGUR_CLIENT_ID = "@Launcher_IMGUR_CLIENT_ID@";
     MSA_CLIENT_ID = "@Launcher_MSA_CLIENT_ID@";
-    META_URL = "@Launcher_META_URL@";
+    IMGUR_CLIENT_ID = "@Launcher_IMGUR_CLIENT_ID@";
 
     BUG_TRACKER_URL = "@Launcher_BUG_TRACKER_URL@";
     DISCORD_URL = "@Launcher_DISCORD_URL@";
     SUBREDDIT_URL = "@Launcher_SUBREDDIT_URL@";
+    PATREON_URL = "@Launcher_PATREON_URL@";
 }
 
 QString Config::printableVersionString() const
 {
-    QString vstr = QString("%1.%2.%3").arg(QString::number(VERSION_MAJOR), QString::number(VERSION_MINOR), QString::number(VERSION_HOTFIX));
+    // major.minor.build, as in the binaries' version resources; 0 for a build without a number
+    QString vstr = QString("%1.%2.%3").arg(QString::number(VERSION_MAJOR), QString::number(VERSION_MINOR), QString::number(VERSION_BUILD >= 0 ? VERSION_BUILD : 0));
 
     // If the build is not a main release, append the channel
     if(VERSION_CHANNEL != "develop")
     {
         vstr += "-" + VERSION_CHANNEL;
-    }
-
-    // if a build number is set, also add it to the end
-    if(VERSION_BUILD >= 0)
-    {
-        vstr += "-" + QString::number(VERSION_BUILD);
     }
     return vstr;
 }

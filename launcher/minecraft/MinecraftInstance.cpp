@@ -149,11 +149,6 @@ void MinecraftInstance::saveNow()
     m_components->saveNow();
 }
 
-QString MinecraftInstance::typeName() const
-{
-    return "Minecraft";
-}
-
 std::shared_ptr<PackProfile> MinecraftInstance::getPackProfile() const
 {
     return m_components;
@@ -276,7 +271,8 @@ QDir MinecraftInstance::versionsPath() const
 QStringList MinecraftInstance::getClassPath() const
 {
     QStringList jars, nativeJars;
-    auto javaArchitecture = settings()->get("JavaArchitecture").toString();
+    auto javaArchitectureStr = settings()->get("JavaArchitecture").toString();
+    Sys::Architecture javaArchitecture = Sys::Architecture::deserialize(javaArchitectureStr);
     auto profile = m_components->getProfile();
     profile->getLibraryFiles(javaArchitecture, jars, nativeJars, getLocalLibraryPath(), binRoot());
     return jars;
@@ -291,7 +287,8 @@ QString MinecraftInstance::getMainClass() const
 QStringList MinecraftInstance::getNativeJars() const
 {
     QStringList jars, nativeJars;
-    auto javaArchitecture = settings()->get("JavaArchitecture").toString();
+    auto javaArchitectureStr = settings()->get("JavaArchitecture").toString();
+    Sys::Architecture javaArchitecture = Sys::Architecture::deserialize(javaArchitectureStr);
     auto profile = m_components->getProfile();
     profile->getLibraryFiles(javaArchitecture, jars, nativeJars, getLocalLibraryPath(), binRoot());
     return nativeJars;
@@ -322,7 +319,7 @@ QStringList MinecraftInstance::javaArguments() const
     // OSX dock icon and name
 #ifdef Q_OS_MAC
     args << "-Xdock:icon=icon.png";
-    args << QString("-Xdock:name=\"%1\"").arg(windowTitle());
+    args << QString("-Xdock:name=%1").arg(windowTitle());
 #endif
     auto traits_ = traits();
     // HACK: fix issues on macOS with 1.13 snapshots
@@ -333,6 +330,45 @@ QStringList MinecraftInstance::javaArguments() const
         args << QString("-XstartOnFirstThread");
     }
 #endif
+
+    bool user_has_shadow_pages = false;
+    for(auto & arg: args)
+    {
+        if(arg.contains("-XX:StackShadowPages="))
+        {
+            user_has_shadow_pages = true;
+            break;
+        }
+    }
+    if(!user_has_shadow_pages)
+    {
+        bool has_shadow_pages = false;
+        int shadow_pages_size = 32;
+        for(const auto &item: traits_)
+        {
+            auto parts = item.split(QChar('='));
+            if(parts.size() != 2)
+            {
+                continue;
+            }
+            if(parts[0] != "StackShadowPages")
+            {
+                continue;
+            }
+            bool ok = true;
+            int value = parts[1].toInt(&ok, 10);
+            if(!ok)
+            {
+                continue;
+            }
+            shadow_pages_size = value;
+            has_shadow_pages = true;
+        }
+        if(has_shadow_pages)
+        {
+            args << QString("-XX:StackShadowPages=%1").arg(shadow_pages_size);
+        }
+    }
 
     // HACK: Stupid hack for Intel drivers. See: https://mojang.atlassian.net/browse/MCL-767
 #ifdef Q_OS_WIN32
@@ -556,7 +592,8 @@ QString MinecraftInstance::createLaunchScript(AuthSessionPtr session, QuickPlayT
     // libraries and class path.
     {
         QStringList jars, nativeJars;
-        auto javaArchitecture = settings()->get("JavaArchitecture").toString();
+        auto javaArchitectureStr = settings()->get("JavaArchitecture").toString();
+        Sys::Architecture javaArchitecture = Sys::Architecture::deserialize(javaArchitectureStr);
         profile->getLibraryFiles(javaArchitecture, jars, nativeJars, getLocalLibraryPath(), binRoot());
         for(auto file: jars)
         {
@@ -613,7 +650,8 @@ QStringList MinecraftInstance::verboseDescription(AuthSessionPtr session, QuickP
     {
         out << "Libraries:";
         QStringList jars, nativeJars;
-        auto javaArchitecture = settings->get("JavaArchitecture").toString();
+        auto javaArchitectureStr = settings->get("JavaArchitecture").toString();
+        Sys::Architecture javaArchitecture = Sys::Architecture::deserialize(javaArchitectureStr);
         profile->getLibraryFiles(javaArchitecture, jars, nativeJars, getLocalLibraryPath(), binRoot());
         auto printLibFile = [&](const QString & path)
         {
@@ -812,7 +850,7 @@ QString MinecraftInstance::getStatusbarDescription()
     }
 
     QString description;
-    description.append(tr("Minecraft %1 (%2)").arg(m_components->getComponentVersion("net.minecraft")).arg(typeName()));
+    description.append(tr("Minecraft %1").arg(m_components->getComponentVersion("net.minecraft")));
     if(m_settings->get("ShowGameTime").toBool())
     {
         if (lastTimePlayed() > 0) {
@@ -959,14 +997,11 @@ shared_qobject_ptr<LaunchTask> MinecraftInstance::createLaunchTask(AuthSessionPt
         process->appendStep(new VerifyJavaInstall(pptr));
     }
 
-    auto accounts = APPLICATION->accounts();
-    auto m_acct = accounts->getAccountByProfileName(session->player_name);
-
-    // authlib patch
-    if (m_acct->provider()->injectorEndpoint() != "")
+    // authlib patch: accounts that don't log in to Mojang (Ely.by, local) need the game pointed at their auth server
+    if (session->provider && !session->provider->injectorEndpoint().isEmpty())
     {
         auto step = new InjectAuthlib(pptr, &m_injector);
-        step->setAuthServer(m_acct->provider()->injectorEndpoint().arg(localAuthServerPort));
+        step->setAuthServer(session->provider->injectorEndpoint().arg(localAuthServerPort));
         step->setOfflineMode(!session->wants_online);
         process->appendStep(step);
     }
