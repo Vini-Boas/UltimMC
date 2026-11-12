@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [ develop ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ develop ]
   workflow_dispatch:
@@ -12,7 +13,7 @@ on:
 jobs:
   build-linux:
     name: build-linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@main
@@ -21,11 +22,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32
-          sudo add-apt-repository 'deb http://dk.archive.ubuntu.com/ubuntu/ bionic main'
-          sudo add-apt-repository 'deb http://dk.archive.ubuntu.com/ubuntu/ bionic universe'
-          sudo apt update
-          sudo apt install libgl1-mesa-dev qttools5-dev g++-5 gcc-5
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev qtbase5-dev qttools5-dev qttools5-dev-tools zlib1g-dev
 
       - name: Build
         run: |
@@ -33,18 +31,10 @@ jobs:
           mkdir build
           cd build
           cmake \
-           -DCMAKE_C_COMPILER=/usr/bin/gcc-5 \
-           -DCMAKE_CXX_COMPILER=/usr/bin/g++-5 \
            -DCMAKE_BUILD_TYPE=Release \
-           -DLauncher_NOTIFICATION_URL:STRING=https://files.multimc.org/notifications.json \
            -DCMAKE_INSTALL_PREFIX:PATH=/home/runner/UltimMC/UltimMC \
-           -DLauncher_UPDATER_BASE=https://files.multimc.org/update/ \
-           -DLauncher_PASTE_EE_API_KEY:STRING=utLvciUouSURFzfjPxLBf5W4ISsUX4pwBDF7N1AfZ \
-           -DLauncher_ANALYTICS_ID:STRING=UA-87731965-2 \
            -DLauncher_LAYOUT=lin-nodeps \
            -DLauncher_BUILD_PLATFORM=lin64 \
-           -DLauncher_BUG_TRACKER_URL=https://github.com/UltimMC/Launcher/issues \
-           -DLauncher_EMBED_SECRETS=On \
            $GITHUB_WORKSPACE
 
       - name: Compile
@@ -157,17 +147,11 @@ jobs:
            -DCMAKE_C_COMPILER=gcc ^
            -DCMAKE_CXX_COMPILER=g++ ^
            -DCMAKE_BUILD_TYPE=Release ^
-           -DLauncher_NOTIFICATION_URL:STRING=https://files.multimc.org/notifications.json ^
            -DCMAKE_INSTALL_PREFIX:PATH="D:/UltimMC/UltimMC" ^
            -DCMAKE_PREFIX_PATH="D:\Qt\5.6.3\mingw49_32" ^
            -DQt5_DIR="D:\Qt\5.6.3\mingw49_32" ^
-           -DLauncher_UPDATER_BASE=https://files.multimc.org/update/ ^
-           -DLauncher_PASTE_EE_API_KEY:STRING=utLvciUouSURFzfjPxLBf5W4ISsUX4pwBDF7N1AfZ ^
-           -DLauncher_ANALYTICS_ID:STRING=UA-87731965-2 ^
            -DLauncher_LAYOUT=win-bundle ^
            -DLauncher_BUILD_PLATFORM=win32 ^
-           -DLauncher_BUG_TRACKER_URL=https://github.com/UltimMC/Launcher/issues ^
-           -DLauncher_EMBED_SECRETS=On ^
            -G "MinGW Makefiles" ^
            ..
 
@@ -222,23 +206,19 @@ jobs:
 
   build-mac:
     name: build-mac
-    runs-on: macos-13
+    runs-on: macos-15-intel
 
     steps:
       - uses: actions/checkout@main
         with:
           submodules: 'recursive'
 
-      - name: Cache Dependencies
-        uses: actions/cache@main
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
         with:
-          path: /Users/runner/Library/Caches/Homebrew
-          key: ${{ runner.os }}-deps-cache
-
-      - name: Install Dependencies
-        run: |
-          brew cleanup
-          brew install qt@5
+          version: '5.15.2'
+          host: 'mac'
+          cache: true
 
       - name: Build
         run: |
@@ -248,18 +228,11 @@ jobs:
            -DCMAKE_C_COMPILER=/usr/bin/clang \
            -DCMAKE_CXX_COMPILER=/usr/bin/clang++ \
            -DCMAKE_BUILD_TYPE=Release \
-           -DLauncher_NOTIFICATION_URL:STRING=https://files.multimc.org/notifications.json \
            -DCMAKE_INSTALL_PREFIX:PATH="/Users/runner/work/UltimMC/build/dist" \
-           -DCMAKE_PREFIX_PATH="$(brew --prefix qt@5)/lib/cmake" \
-           -DQt5_DIR="$(brew --prefix qt@5)" \
-           -DLauncher_UPDATER_BASE=https://files.multimc.org/update/ \
-           -DLauncher_PASTE_EE_API_KEY:STRING=utLvciUouSURFzfjPxLBf5W4ISsUX4pwBDF7N1AfZ \
-           -DLauncher_ANALYTICS_ID:STRING=UA-87731965-2 \
+           -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
            -DLauncher_LAYOUT=mac-bundle \
            -DLauncher_BUILD_PLATFORM=osx64-5.15.2 \
-           -DLauncher_BUG_TRACKER_URL=https://github.com/UltimMC/Launcher/issues \
            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13 \
-           -DLauncher_EMBED_SECRETS=On \
            $GITHUB_WORKSPACE
 
       - name: Compile
@@ -284,3 +257,43 @@ jobs:
         with:
           name: mmc-cracked-osx64
           path: /Users/runner/work/UltimMC/build/dist
+
+  release:
+    name: release
+    needs: [build-linux, build-windows, build-mac]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # upload-artifact drops Unix permission bits, restore them before zipping
+      - name: Package
+        run: |
+          chmod +x artifacts/mmc-cracked-lin64/UltimMC/UltimMC artifacts/mmc-cracked-lin64/UltimMC/bin/UltimMC
+          chmod +x artifacts/mmc-cracked-osx64/UltimMC.app/Contents/MacOS/UltimMC
+          mkdir dist
+          for d in artifacts/*; do
+            (cd "$d" && zip -qr "$GITHUB_WORKSPACE/dist/$(basename "$d").zip" .)
+          done
+          ls -l dist
+
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --title "UltimMC $GITHUB_REF_NAME" --generate-notes
+
+      - name: Publish nightly release
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          gh release delete nightly --cleanup-tag --yes || true
+          gh release create nightly dist/*.zip --prerelease --target "$GITHUB_SHA" \
+            --title "Nightly ($(date -u +%Y-%m-%d))" \
+            --notes "Automated build of develop at $GITHUB_SHA. Not a stable release."
