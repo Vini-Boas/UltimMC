@@ -213,6 +213,14 @@ jobs:
         with:
           submodules: 'recursive'
 
+      # the launcher's helper jars build with -source 7, which newer JDKs refuse. Linux and Windows pin JDK 8 too.
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '8'
+          architecture: x64
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
