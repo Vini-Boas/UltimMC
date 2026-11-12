@@ -23,7 +23,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev qtbase5-dev qttools5-dev qttools5-dev-tools zlib1g-dev
+          sudo apt-get install -y libgl1-mesa-dev qtbase5-dev libqt5svg5-dev qttools5-dev qttools5-dev-tools zlib1g-dev
 
       - name: Build
         run: |
