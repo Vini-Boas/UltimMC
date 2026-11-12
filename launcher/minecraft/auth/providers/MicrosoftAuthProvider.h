@@ -26,5 +26,9 @@ public:
         return true;
     }
 
+    //! Microsoft login needs a client ID, and this fork doesn't ship one (see Application::msaClientId)
+    bool isAvailable() override;
+    QString unavailableReason() override;
+
     shared_qobject_ptr<AccountTask> createRefreshTask(AccountData* data) override;
 };

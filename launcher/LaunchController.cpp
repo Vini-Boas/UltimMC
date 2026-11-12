@@ -122,6 +122,16 @@ void LaunchController::login() {
         return;
     }
 
+    // an account whose provider can't work right now (Microsoft without a client ID) can't be refreshed or
+    // launched. Say why, instead of waiting on a refresh that will never start.
+    if (m_accountToUse->provider() && !m_accountToUse->provider()->isAvailable())
+    {
+        auto reason = m_accountToUse->provider()->unavailableReason();
+        QMessageBox::warning(m_parentWidget, tr("Can't use this account"), reason);
+        emitFailed(reason);
+        return;
+    }
+
     // we loop until the user succeeds in logging in or gives up
     bool tryagain = true;
 

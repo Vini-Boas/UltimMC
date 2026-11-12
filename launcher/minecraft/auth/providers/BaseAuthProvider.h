@@ -45,6 +45,18 @@ public:
      */
     virtual shared_qobject_ptr<AccountTask> createRefreshTask(AccountData* data) = 0;
 
+    //! Whether accounts of this kind can authenticate right now. Microsoft needs a client ID, for example.
+    virtual bool isAvailable()
+    {
+        return true;
+    }
+
+    //! Why isAvailable() is false, worded so the user knows what to do about it.
+    virtual QString unavailableReason()
+    {
+        return QString();
+    }
+
     //! Server for the authlib injector to talk to. Empty if the game needs no injector (vanilla MSA).
     virtual QString injectorEndpoint()
     {

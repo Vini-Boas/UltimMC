@@ -31,6 +31,7 @@
 #include <QLabel>
 #include <QPushButton>
 
+#include "minecraft/auth/AuthProviders.h"
 #include "ui/dialogs/ElybyLoginDialog.h"
 #include "ui/dialogs/LocalLoginDialog.h"
 
@@ -597,6 +598,19 @@ void AccountsDialog::stopLogin()
 
 void AccountsDialog::startLogin()
 {
+    // Microsoft login can't work without a client ID. Explain how to provide one instead of
+    // starting a login that is bound to fail. Local and Ely.by accounts are added with the buttons below.
+    auto microsoft = AuthProviders::lookup("MSA");
+    if(microsoft && !microsoft->isAvailable())
+    {
+        ui->label->setText(microsoft->unavailableReason());
+        ui->getFreshCodeButton->setEnabled(false);
+        ui->linkButton->setVisible(false);
+        ui->copyLinkButton->setVisible(false);
+        ui->progressBar->setVisible(false);
+        return;
+    }
+
     ui->getFreshCodeButton->setEnabled(false);
     ui->linkButton->setVisible(false);
     ui->copyLinkButton->setVisible(false);

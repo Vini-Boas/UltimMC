@@ -118,6 +118,9 @@ public:
 
     QString msaClientId() const;
 
+    //! False when no Microsoft client ID is available, so Microsoft login can't work
+    bool hasMsaClientId() const;
+
     Status status() const {
         return m_status;
     }

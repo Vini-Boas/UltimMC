@@ -255,6 +255,12 @@ shared_qobject_ptr<AccountTask> MinecraftAccount::refresh() {
         return nullptr;
     }
 
+    // Don't even try when the provider can't work (Microsoft without a client ID): a failed refresh
+    // is treated as a hard failure and would throw away the saved tokens.
+    if(!data.provider->isAvailable()) {
+        return nullptr;
+    }
+
     // The provider knows how accounts of its kind refresh. No branching on the type here.
     m_currentTask = data.provider->createRefreshTask(&data);
 

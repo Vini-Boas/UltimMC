@@ -154,9 +154,12 @@ endif()
 # breakage to thousands of users.
 # If you don't plan to use these features of this software, you can just remove these values.
 
-# By using this key in your builds you accept the terms of use laid down in
+# Empty on purpose: this fork doesn't ship a Microsoft client ID. Users supply their own at runtime
+# (the MSAClientID setting in the launcher's config file, or the ULTIMMC_MSA_CLIENT_ID environment
+# variable), or a distributor can bake one in here with -DLauncher_MSA_CLIENT_ID=...
+# By using a key in your builds you accept the terms of use laid down in
 # https://docs.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use
-set(Launcher_MSA_CLIENT_ID "d77ef04a-390a-40c6-a32d-700a4549ffa6" CACHE STRING "Client ID you can get from Microsoft Identity Platform when you register an application")
+set(Launcher_MSA_CLIENT_ID "" CACHE STRING "Client ID you can get from Microsoft Identity Platform when you register an application")
 
 #### Check the current Git commit and branch
 include(GetGitRevisionDescription)

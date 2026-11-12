@@ -786,6 +786,9 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
         // Minecraft offline player name
         m_settings->registerSetting("LastOfflinePlayerName", "");
 
+        // The user's own Microsoft client ID, for builds that don't ship one (see msaClientId())
+        m_settings->registerSetting("MSAClientID", "");
+
         // Wrapper command for launch
         m_settings->registerSetting("WrapperCommand", "");
 
@@ -1586,7 +1589,22 @@ void Application::on_windowClose()
 }
 
 QString Application::msaClientId() const {
+    // Most specific first: the environment, then the config file, then what the build shipped with
+    // (nothing, unless whoever built this launcher baked one in).
+    // NOTE: qgetenv, not qEnvironmentVariable: the latter needs Qt 5.10, and we still build on 5.6.
+    const QString fromEnvironment = QString::fromLocal8Bit(qgetenv("ULTIMMC_MSA_CLIENT_ID")).trimmed();
+    if (!fromEnvironment.isEmpty()) {
+        return fromEnvironment;
+    }
+    const QString fromSettings = m_settings->get("MSAClientID").toString().trimmed();
+    if (!fromSettings.isEmpty()) {
+        return fromSettings;
+    }
     return BuildConfig.MSA_CLIENT_ID;
+}
+
+bool Application::hasMsaClientId() const {
+    return !msaClientId().isEmpty();
 }
 
 void Application::updateProxySettings(QString proxyTypeStr, QString addr, int port, QString user, QString password)
