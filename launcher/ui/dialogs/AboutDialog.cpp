@@ -33,6 +33,19 @@ QString getCreditsHtml(QStringList patrons)
     stream.setCodec(QTextCodec::codecForName("UTF-8"));
     stream << "<center>\n";
 
+    // This fork: who made it. The names are the authors of the fork's own commits.
+    const QString forkName = BuildConfig.LAUNCHER_NAME.toHtmlEscaped();
+    stream << "<h2>" << forkName << "</h2>\n";
+    stream << "<p>" << QObject::tr("A fork of MultiMC, made by:", "About Credits") << "</p>\n";
+    stream << "<p>Neptune<br/>BigBoyPro<br/>Vini-Boas</p>\n";
+    stream << "<p>" << QObject::tr("and everyone in the <a href='%1'>project's history</a>.", "About Credits").arg(BuildConfig.LAUNCHER_GIT) << "</p>\n";
+
+    // MultiMC: the project this is built on. The author, maintainer and patrons below are MultiMC's.
+    stream << "<hr/>\n";
+    stream << "<h2>MultiMC</h2>\n";
+    stream << "<p>" << QObject::tr("The project this is a fork of. %1 is not affiliated with or endorsed by MultiMC.", "About Credits").arg(forkName) << "</p>\n";
+    stream << "<p><a href='https://github.com/MultiMC/Launcher'>github.com/MultiMC/Launcher</a></p>\n";
+
     stream << "<h3>" << QObject::tr("Original Author", "About Credits") << "</h3>\n";
     stream << "<p>Andrew Okin &lt;<a href='mailto:forkk@forkk.net'>forkk@forkk.net</a>&gt;</p>\n";
 
