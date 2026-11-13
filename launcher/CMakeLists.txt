@@ -138,6 +138,11 @@ add_unit_test(AccountList
     LIBS Launcher_logic
     )
 
+add_unit_test(SkinModelGuess
+    SOURCES skins/SkinModelGuess_test.cpp
+    LIBS Launcher_logic
+    )
+
 set(PATHMATCHER_SOURCES
     # Path matchers
     pathmatcher/FSTreeMatcher.h
@@ -755,6 +760,8 @@ SET(LAUNCHER_SOURCES
     skins/SkinRenderer.cpp
     skins/SkinWidget.h
     skins/SkinWidget.cpp
+    skins/SkinModelGuess.h
+    skins/SkinModelGuess.cpp
     skins/SkinTypes.h
     skins/SkinTypes.cpp
     skins/SkinUtils.h

@@ -4,6 +4,8 @@
 
 #include "minecraft/auth/AuthRequest.h"
 #include "minecraft/auth/Parsers.h"
+#include "skins/SkinModelGuess.h"
+#include "skins/SkinUtils.h"
 
 ElybyProfileStep::ElybyProfileStep(AccountData* data) : AuthStep(data) {
 
@@ -73,7 +75,7 @@ void ElybyProfileStep::fetchSkin() {
     auto url = m_data->provider->resolveSkinUrl(m_data->minecraftProfile.id, m_data->minecraftProfile.name);
     m_data->minecraftProfile.skin.url = url.toString();
     if (m_data->minecraftProfile.skin.variant.isEmpty()) {
-        // Ely.by's skin file doesn't say which arm model it is for. Only the preview depends on this.
+        // until the skin is downloaded and looked at (see onSkinDone), and if that fails
         m_data->minecraftProfile.skin.variant = "CLASSIC";
     }
 
@@ -94,6 +96,14 @@ void ElybyProfileStep::onSkinDone(
     // it works fine without one. 404 means the player has no skin, so forget any old one.
     if (error == QNetworkReply::NoError && !data.isEmpty()) {
         m_data->minecraftProfile.skin.data = data;
+
+        // Ely.by's skin file doesn't say which arm model it is for, so work it out from the picture
+        QImage image;
+        QString textureId;
+        if (Skins::readSkinFromData(data, image, textureId)) {
+            const bool slim = Skins::guessSkinModel(image) == Skins::Model::Slim;
+            m_data->minecraftProfile.skin.variant = slim ? "SLIM" : "CLASSIC";
+        }
     } else if (error == QNetworkReply::ContentNotFoundError) {
         m_data->minecraftProfile.skin.data.clear();
     }
