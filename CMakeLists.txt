@@ -217,7 +217,8 @@ set(Launcher_Branding_LogoQRC "${PROJECT_SOURCE_DIR}/branding/logo.qrc")
 set(Launcher_PASTE_EE_API_KEY "utLvciUouSURFzfjPxLBf5W4ISsUX4pwBDF7N1AfZ")
 set(Launcher_IMGUR_CLIENT_ID "5b97b0713fba4a3")
 set(Launcher_BUG_TRACKER_URL "https://github.com/UltimMC/Launcher/issues")
-set(Launcher_DISCORD_URL "https://discord.gg/multimc")
+# empty on purpose: this fork has no Discord, and the main window only shows the button when there is a URL
+set(Launcher_DISCORD_URL "")
 set(Launcher_SUBREDDIT_URL "https://www.reddit.com/r/MultiMC/")
 set(Launcher_PATREON_URL "https://www.patreon.com/multimc")
 
