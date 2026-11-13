@@ -40,7 +40,7 @@ And an AUR package as [ultimmc-bin](https://aur.archlinux.org/packages/ultimmc-b
 3. Launch `UltimMC`.
 4. Go to account settings.
 6. A. Pick "Add Local" and you will be requested to use the username you desire, this can be anything.
-7. B. Pick "Add Ely.by" and add your Ely.by account by putting your email and password.
+7. B. Pick "Add Ely.by" and add your Ely.by account by putting your username and password.
 8. Save it.
 9. Now enjoy the Launcher.
 

@@ -61,6 +61,13 @@ public:
     void removeAccount(const QString& accountId);
 
     bool getAccountByXID(const QString &xid, MinecraftAccountPtr& pointer, int& index) const;
+
+    /**
+     * Finds the account already in the list that is the same account as the given one, if any:
+     * the same Xbox user for Microsoft accounts, the same login name and type for Ely.by and local ones.
+     * Placeholders of unsupported accounts never match anything.
+     */
+    bool getAccountByIdentity(const MinecraftAccountPtr& account, MinecraftAccountPtr& pointer, int& index) const;
     bool getAccountByProfileName(const QString& profileName, MinecraftAccountPtr& pointer, int& index) const;
     bool getAccountById(const QString& internalId, MinecraftAccountPtr& pointer, int& index) const;
 

@@ -54,6 +54,12 @@ AccountList::AccountList(QObject *parent) : QAbstractListModel(parent) {
 AccountList::~AccountList() noexcept {}
 
 bool AccountList::getAccountByXID(const QString& xid, MinecraftAccountPtr& pointer, int& index) const {
+    // Only Microsoft accounts have an Xbox ID. An empty one would match every other kind of account.
+    if(xid.isEmpty()) {
+        pointer = nullptr;
+        index = -1;
+        return false;
+    }
     for (int i = 0; i < count(); i++) {
         auto entry = at(i);
         if(!entry.isAccount)
@@ -107,6 +113,35 @@ bool AccountList::getAccountById(const QString& internalId, MinecraftAccountPtr&
     return false;
 }
 
+bool AccountList::getAccountByIdentity(const MinecraftAccountPtr& account, MinecraftAccountPtr& pointer, int& index) const {
+    pointer = nullptr;
+    index = -1;
+    if(!account->isSupported()) {
+        return false;
+    }
+    const auto xid = account->xid();
+    if(!xid.isEmpty()) {
+        return getAccountByXID(xid, pointer, index);
+    }
+    // No Xbox ID: Ely.by and local accounts are the same account when type and login name match.
+    const auto name = account->userName();
+    if(name.isEmpty()) {
+        return false;
+    }
+    for (int i = 0; i < count(); i++) {
+        auto entry = at(i);
+        if(!entry.isAccount || entry.account == account || !entry.account->isSupported()) {
+            continue;
+        }
+        if(entry.account->typeString() == account->typeString() && entry.account->userName() == name) {
+            pointer = entry.account;
+            index = i;
+            return true;
+        }
+    }
+    return false;
+}
+
 const AccountList::Entry& AccountList::at(int i) const
 {
     return m_accounts.at(i);
@@ -141,11 +176,10 @@ QModelIndex AccountList::addAccount(const MinecraftAccountPtr account)
         }
     }
 
-    // override/replace existing account with the same XUID
-    auto xid = account->xid();
+    // override/replace the existing account if it's the same account (same XUID, or same login for Ely.by/local)
     MinecraftAccountPtr existingAccountPtr;
     int existingIndex;
-    if(getAccountByXID(xid, existingAccountPtr, existingIndex)) {
+    if(getAccountByIdentity(account, existingAccountPtr, existingIndex)) {
         existingAccountPtr->replaceDataWith(account);
         auto modelIndex = index(existingIndex);
         emit dataChanged(modelIndex, modelIndex);

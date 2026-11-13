@@ -568,7 +568,7 @@ void AccountsDialog::onAddElybyClicked()
 {
     auto account = ElybyLoginDialog::newAccount(
         this,
-        tr("Please enter your Ely.by email and password to add your account.")
+        tr("Please enter your Ely.by username and password to add your account.")
     );
     if(account)
     {
