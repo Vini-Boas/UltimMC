@@ -205,7 +205,7 @@ set(Launcher_DisplayName "${Launcher_CommonName} 5")
 # kept as MultiMC on purpose: this is what the fork has always sent to MultiMC's servers
 set(Launcher_UserAgent "MultiMC/5.0")
 set(Launcher_ConfigFile "ultimmc.cfg")
-set(Launcher_Git "https://github.com/UltimMC/Launcher")
+set(Launcher_Git "https://github.com/Vini-Boas/UltimMC")
 
 set(Launcher_Branding_ICNS "${PROJECT_SOURCE_DIR}/branding/${Launcher_CommonName}.icns")
 # with the version filled in (major,minor,build,0: the Microsoft Store keeps the fourth part)
@@ -216,10 +216,10 @@ set(Launcher_Branding_LogoQRC "${PROJECT_SOURCE_DIR}/branding/logo.qrc")
 
 set(Launcher_PASTE_EE_API_KEY "utLvciUouSURFzfjPxLBf5W4ISsUX4pwBDF7N1AfZ")
 set(Launcher_IMGUR_CLIENT_ID "5b97b0713fba4a3")
-set(Launcher_BUG_TRACKER_URL "https://github.com/UltimMC/Launcher/issues")
+set(Launcher_BUG_TRACKER_URL "https://github.com/Vini-Boas/UltimMC/issues")
 # empty on purpose: this fork has no Discord, and the main window only shows the button when there is a URL
 set(Launcher_DISCORD_URL "")
-set(Launcher_SUBREDDIT_URL "https://www.reddit.com/r/MultiMC/")
+set(Launcher_SUBREDDIT_URL "")
 set(Launcher_PATREON_URL "https://www.patreon.com/multimc")
 
 ####################################### Install layout #######################################
