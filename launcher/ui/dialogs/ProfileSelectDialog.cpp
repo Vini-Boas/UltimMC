@@ -47,7 +47,8 @@ ProfileSelectDialog::ProfileSelectDialog(const QString &message, int flags, QWid
     for (int i = 0; i < m_accounts->count(); i++)
     {
         auto entry = m_accounts->at(i);
-        if(!entry.isAccount)
+        // unsupported accounts (e.g. old Mojang ones) can't be picked to play with
+        if(!entry.isAccount || !entry.account->isSupported())
         {
             continue;
         }

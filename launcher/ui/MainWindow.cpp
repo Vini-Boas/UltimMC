@@ -1168,6 +1168,19 @@ void MainWindow::repopulateAccountsMenu()
             }
             auto account = entry.account;
 
+            if(!account->isSupported())
+            {
+                // An account this version can't use: show what it was, greyed out, and don't let it be picked.
+                // It is removed from the Accounts dialog.
+                auto name = account->unsupportedName();
+                auto label = name.isEmpty() ? account->unsupportedKind() : name;
+                QAction *placeholder = new QAction(tr("%1 (no longer supported)").arg(label), this);
+                placeholder->setEnabled(false);
+                placeholder->setIcon(APPLICATION->getThemedIcon("noaccount"));
+                accountMenu->addAction(placeholder);
+                continue;
+            }
+
             auto profileLabel = profileInUseFilter(account->profileName(), account->gamerTag(), account->isInUse());
             QAction *action = new QAction(profileLabel, this);
             action->setData(i);

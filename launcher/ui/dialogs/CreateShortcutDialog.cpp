@@ -34,7 +34,8 @@ CreateShortcutDialog::CreateShortcutDialog(QWidget *parent, InstancePtr instance
     for (int i = 0; i < accounts->count(); i++)
     {
         auto entry = accounts->at(i);
-        if(!entry.isAccount)
+        // unsupported accounts (e.g. old Mojang ones) can't be used for a shortcut
+        if(!entry.isAccount || !entry.account->isSupported())
         {
             continue;
         }
