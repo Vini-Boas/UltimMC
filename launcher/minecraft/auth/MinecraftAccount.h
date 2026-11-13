@@ -29,8 +29,7 @@
 #include "Usable.h"
 #include "AccountData.h"
 #include "QObjectPtr.h"
-
-#include "providers/BaseAuthProvider.h"
+#include "skins/SkinTypes.h"
 
 class Task;
 class AccountTask;
@@ -46,13 +45,12 @@ Q_DECLARE_METATYPE(MinecraftAccountPtr)
  * but we might as well add some things for it in MultiMC right now so
  * we don't have to rip the code to pieces to add it later.
  */
-// Defined in providers/BaseAuthProvider.h
-//struct AccountProfile
-//{
-    //QString id;
-    //QString name;
-    //bool legacy;
-//};
+struct AccountProfile
+{
+    QString id;
+    QString name;
+    bool legacy;
+};
 
 /**
  * Object that stores information about a certain Mojang account.
@@ -72,27 +70,27 @@ public: /* construction */
     //! Default constructor
     explicit MinecraftAccount(QObject *parent = 0);
 
-    static MinecraftAccountPtr createFromUsername(const QString &username);
-
-    static MinecraftAccountPtr createLocal(const QString &username);
-
-    static MinecraftAccountPtr createElyby(const QString &username);
-
     static MinecraftAccountPtr createBlankMSA();
 
-    static MinecraftAccountPtr loadFromJsonV2(const QJsonObject &json);
+    //! A local (offline) account with the given user name. Call loginLocal() afterwards.
+    static MinecraftAccountPtr createLocal(const QString &username);
+
+    //! An Ely.by account with the given login. Call loginElyby() afterwards.
+    static MinecraftAccountPtr createElyby(const QString &username);
+
+    /**
+     * A placeholder for an entry in accounts.json that this version can't use, e.g. a Mojang account
+     * (those no longer exist). It is shown disabled, never refreshed or launched, and saved back
+     * exactly as it was, so nobody loses an account by trying a newer version.
+     */
+    static MinecraftAccountPtr createUnsupported(const QJsonObject &entry);
+
     static MinecraftAccountPtr loadFromJsonV3(const QJsonObject &json);
 
     //! Saves a MinecraftAccount to a JSON object and returns it.
     QJsonObject saveToJson() const;
 
 public: /* manipulation */
-
-    /**
-     * Attempt to login. Empty password means we use the token.
-     * If the attempt fails because we already are performing some task, it returns false.
-     */
-    shared_qobject_ptr<AccountTask> login(QString password);
 
     shared_qobject_ptr<AccountTask> loginMSA();
 
@@ -102,28 +100,44 @@ public: /* manipulation */
 
     shared_qobject_ptr<AccountTask> refresh();
 
+    shared_qobject_ptr<AccountTask> createMinecraftProfile(const QString& profileName);
+
+    shared_qobject_ptr<AccountTask> setSkin(Skins::Model model, QByteArray texture, const QString& capeUUID);
+
     shared_qobject_ptr<AccountTask> currentTask();
 
 public: /* queries */
-    bool setProvider(AuthProviderPtr provider) {
-        data.provider = provider;
-        return true;
+    //! How accounts of this kind authenticate (see BaseAuthProvider)
+    AuthProviderPtr provider() const {
+        return data.provider;
     }
 
-    AuthProviderPtr provider() {
-        return data.provider;
+    //! False for placeholders of accounts this version can't use (see createUnsupported)
+    bool isSupported() const {
+        return data.accountState != AccountState::Unsupported;
+    }
+
+    //! Unsupported accounts only: what to call them in the list
+    QString unsupportedName() const {
+        return data.unsupportedName();
+    }
+
+    //! Unsupported accounts only: the old type, e.g. "Mojang"
+    QString unsupportedKind() const {
+        return data.unsupportedKind();
+    }
+
+    //! The login name of Ely.by and local accounts
+    QString userName() const {
+        return data.userName();
     }
 
     QString internalId() const {
         return data.internalId;
     }
 
-    QString accountDisplayString() const {
-        return data.accountDisplayString();
-    }
-
-    QString mojangUserName() const {
-        return data.userName();
+    QString gamerTag() const {
+        return data.gamerTag();
     }
 
     QString accessToken() const {
@@ -138,15 +152,11 @@ public: /* queries */
         return data.profileName();
     }
 
+    QString xid() const {
+        return data.xid();
+    }
+
     bool isActive() const;
-
-    bool canMigrate() const {
-        return data.canMigrateToMSA;
-    }
-
-    bool isMSA() const {
-        return data.type == AccountType::MSA;
-    }
 
     bool ownsMinecraft() const {
         return data.minecraftEntitlement.ownsMinecraft;
@@ -156,37 +166,29 @@ public: /* queries */
         return data.profileId().size() != 0;
     }
 
+    //! Passed to the game as the user type
     QString typeString() const {
         switch(data.type) {
-            case AccountType::Mojang: {
-                if(data.legacy) {
-                    return "legacy";
-                }
-                return data.provider->displayName();
-            }
-            break;
-            case AccountType::MSA: {
-                return "msa";
-            }
-            break;
-            case AccountType::Local: {
+            case AccountType::Local:
                 return "local";
-            }
-            break;
-            case AccountType::Elyby: {
+            case AccountType::Elyby:
                 return "elyby";
-            }
-            break;
-            default: {
-                return "unknown";
-            }
+            case AccountType::MSA:
+            default:
+                return "msa";
         }
     }
 
     QPixmap getFace() const;
 
+    QByteArray getSkin() const;
+    QString getCurrentCape() const;
+    Skins::Model getSkinModel() const;
+
+
     //! Returns the current state of the account
     AccountState accountState() const;
+    QString accountStateText() const;
 
     AccountData * accountData() {
         return &data;
@@ -200,6 +202,9 @@ public: /* queries */
         return data.lastError();
     }
 
+    void updateCapeCache() const;
+
+    void replaceDataWith(MinecraftAccountPtr other);
 signals:
     /**
      * This signal is emitted when the account changes

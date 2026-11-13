@@ -1,5 +1,7 @@
 #pragma once
+#include <QByteArray>
 #include <QString>
+#include <QStringList>
 
 /**
  * \brief The Config class holds all the build-time information passed from the build system.
@@ -19,9 +21,7 @@ public:
     int VERSION_MAJOR;
     /// The minor version number.
     int VERSION_MINOR;
-    /// The hotfix number.
-    int VERSION_HOTFIX;
-    /// The build number.
+    /// The build number, -1 for a build without one. The version is major.minor.build.
     int VERSION_BUILD;
 
     /**
@@ -35,8 +35,26 @@ public:
     /// A short string identifying this build's platform. For example, "lin64" or "win32".
     QString BUILD_PLATFORM;
 
+    /**
+     * Our sites: the base URLs of each, the main server first, then its copies.
+     * Downloads from a site fall back to its other base URLs (Net::Mirrors).
+     */
+    QStringList FILES_MIRRORS;
+    QStringList META_MIRRORS;
+
     /// URL for the updater's channel
     QString UPDATER_BASE;
+
+    /// The updater this build uses: 1, the current one, or 2 (Design/Updater.md in the MultiMC repository)
+    int UPDATER_VERSION = 1;
+    /// Updater v2: pinned root public keys (hex)
+    QStringList UPDATER_ROOT_KEYS;
+    /// Updater v2: the keys document trusted without a signature, as its exact bytes
+    QByteArray UPDATER_KEYS_FLOOR;
+    /// Updater v2: the lowest tags serial accepted
+    qint64 UPDATER_SERIAL_FLOOR = 0;
+    /// Updater v2: this build's variant ID
+    QString UPDATER_VARIANT;
 
 
     /// User-Agent to use.
@@ -45,9 +63,6 @@ public:
     /// User-Agent to use for uncached requests.
     QString USER_AGENT_UNCACHED;
 
-
-    /// Google analytics ID
-    QString ANALYTICS_ID;
 
     /// URL for notifications
     QString NOTIFICATION_URL;
@@ -65,6 +80,12 @@ public:
     QString VERSION_STR;
 
     /**
+     * This is used to open the news page with the "More news" button.
+     * It defaults in CMakeLists.txt to "https://multimc.org/posts.html"
+     */
+    QString NEWS_URL;
+
+    /**
      * This is used to fetch the news RSS feed.
      * It defaults in CMakeLists.txt to "https://multimc.org/rss.xml"
      */
@@ -76,14 +97,15 @@ public:
     QString PASTE_EE_KEY;
 
     /**
+     * API key from registering an application in Microsoft Azure
+     * See: https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
+     */
+    QString MSA_CLIENT_ID;
+
+    /**
      * Client ID you can get from Imgur when you register an application
      */
     QString IMGUR_CLIENT_ID;
-
-    /**
-     * Client ID you can get from Microsoft Identity Platform when you register an application
-     */
-    QString MSA_CLIENT_ID;
 
     /**
      * Metadata repository URL prefix
@@ -93,13 +115,20 @@ public:
     QString BUG_TRACKER_URL;
     QString DISCORD_URL;
     QString SUBREDDIT_URL;
+    QString PATREON_URL;
 
     QString RESOURCE_BASE = "https://resources.download.minecraft.net/";
     QString LIBRARY_BASE = "https://libraries.minecraft.net/";
-    QString AUTH_BASE = "https://authserver.mojang.com/";
+    QString API_BASE = "https://api.minecraftservices.com";
+    QString SESSION_BASE = "https://sessionserver.mojang.com";
+    QString TEXTURE_BASE = "http://textures.minecraft.net";
     QString IMGUR_BASE_URL = "https://api.imgur.com/3/";
-    QString FMLLIBS_BASE_URL = "https://files.multimc.org/fmllibs/";
-    QString TRANSLATIONS_BASE_URL = "https://files.multimc.org/translations/";
+    /// Where the Launcher can be downloaded: for an installation that can no longer update itself
+    QString WEBSITE_URL = "https://multimc.org/";
+    QString FMLLIBS_BASE_URL;
+    QString PATRONS_URL;
+
+    QString TRANSLATIONS_BASE_URL;
 
     QString LEGACY_FTB_CDN_BASE_URL = "https://dist.creeper.host/FTB2/";
 

@@ -10,6 +10,7 @@
 #include "FileSystem.h"
 #include "net/NetJob.h"
 #include "net/ChecksumValidator.h"
+#include "net/SizeValidator.h"
 #include "BuildConfig.h"
 #include "Json.h"
 
@@ -46,6 +47,13 @@ struct Language
         }
         else if(key == "es_UY") {
             result = u8"español de Latinoamérica";
+        }
+        // older Qt (5.6 on Windows) has no native name for these
+        else if(key == "eo") {
+            result = u8"esperanto";
+        }
+        else if(key == "jv") {
+            result = u8"Jawa";
         }
         else {
             result = locale.nativeLanguageName();
@@ -85,7 +93,7 @@ struct Language
             file_sha1 == other.file_sha1 &&
             translated == other.translated &&
             fuzzy == other.fuzzy &&
-            total == other.fuzzy &&
+            total == other.total &&
             localFileType == other.localFileType
         );
     }
@@ -219,6 +227,11 @@ void readIndex(const QString & path, QMap<QString, Language>& languages)
                 Json::ensureInteger(langObj, "untranslated", 0),
                 Json::ensureInteger(langObj, "fuzzy", 0)
             );
+            // nothing translated yet, nothing to offer
+            if(lang.total > 0 && lang.translated == 0)
+            {
+                continue;
+            }
             lang.file_name = Json::requireString(langObj, "file");
             lang.file_sha1 = Json::requireString(langObj, "sha1");
             lang.file_size = Json::requireInteger(langObj, "size");
@@ -571,10 +584,11 @@ void TranslationsModel::downloadIndex()
         return;
     }
     qDebug() << "Downloading Translations Index...";
+    QLatin1String index_file("index_v2.json");
     d->m_index_job = new NetJob("Translations Index", APPLICATION->network());
-    MetaEntryPtr entry = APPLICATION->metacache()->resolveEntry("translations", "index_v2.json");
+    MetaEntryPtr entry = APPLICATION->metacache()->resolveEntry("translations", index_file);
     entry->setStale(true);
-    d->m_index_task = Net::Download::makeCached(QUrl("https://files.multimc.org/translations/index_v2.json"), entry);
+    d->m_index_task = Net::Download::makeCached(QUrl(BuildConfig.TRANSLATIONS_BASE_URL + index_file), entry);
     d->m_index_job->addNetAction(d->m_index_task);
     connect(d->m_index_job.get(), &NetJob::failed, this, &TranslationsModel::indexFailed);
     connect(d->m_index_job.get(), &NetJob::succeeded, this, &TranslationsModel::indexReceived);
@@ -621,6 +635,7 @@ void TranslationsModel::downloadTranslation(QString key)
     auto dl = Net::Download::makeCached(QUrl(BuildConfig.TRANSLATIONS_BASE_URL + lang->file_name), entry);
     auto rawHash = QByteArray::fromHex(lang->file_sha1.toLatin1());
     dl->addValidator(new Net::ChecksumValidator(QCryptographicHash::Sha1, rawHash));
+    dl->addValidator(new Net::SizeValidator(lang->file_size));
     dl->m_total_progress = lang->file_size;
 
     d->m_dl_job = new NetJob("Translation for " + key, APPLICATION->network());

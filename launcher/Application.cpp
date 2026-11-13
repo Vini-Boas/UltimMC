@@ -11,23 +11,23 @@
 #include "ui/pages/global/MinecraftPage.h"
 #include "ui/pages/global/JavaPage.h"
 #include "ui/pages/global/LanguagePage.h"
+#include "ui/pages/global/UpdatesPage.h"
+#include "ui/pages/global/AppearancePage.h"
 #include "ui/pages/global/ProxyPage.h"
 #include "ui/pages/global/ExternalToolsPage.h"
-#include "ui/pages/global/AccountListPage.h"
 #include "ui/pages/global/PasteEEPage.h"
 #include "ui/pages/global/CustomCommandsPage.h"
 
-#include "ui/themes/ITheme.h"
-#include "ui/themes/SystemTheme.h"
-#include "ui/themes/DarkTheme.h"
-#include "ui/themes/BrightTheme.h"
-#include "ui/themes/CustomTheme.h"
+#include "ui/themes/ThemeManager.h"
+#include "ui/themes/TitleBar.h"
 
 #include "ui/setupwizard/SetupWizard.h"
 #include "ui/setupwizard/LanguageWizardPage.h"
 #include "ui/setupwizard/JavaWizardPage.h"
-#include "ui/setupwizard/AnalyticsWizardPage.h"
+#include "ui/setupwizard/UpdatesWizardPage.h"
+#include "ui/setupwizard/ThemeWizardPage.h"
 
+#include "ui/dialogs/AccountsDialog.h"
 #include "ui/dialogs/CustomMessageBox.h"
 
 #include "ui/pagedialog/PageDialog.h"
@@ -40,6 +40,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QNetworkAccessManager>
+#include <QTimer>
 #include <QTranslator>
 #include <QLibraryInfo>
 #include <QList>
@@ -54,9 +55,14 @@
 #include "icons/IconList.h"
 #include "net/HttpMetaCache.h"
 
+#include "skins/CapeCache.h"
+#include "skins/SkinsModel.h"
+
 #include "java/JavaUtils.h"
 
-#include "updater/UpdateChecker.h"
+#include "updater/v1/UpdateChecker.h"
+#include "updater/v2/Checker.h"
+#include "updater/v2/SystemRequirements.h"
 
 #include "tools/JProfiler.h"
 #include "tools/JVisualVM.h"
@@ -75,11 +81,7 @@
 #include <DesktopServices.h>
 #include <LocalPeer.h>
 
-#include <ganalytics.h>
 #include <sys.h>
-
-#include <Secrets.h>
-
 
 #if defined Q_OS_WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -125,14 +127,7 @@ QString getIdealPlatform(QString currentPlatform) {
     auto info = Sys::getKernelInfo();
     switch(info.kernelType) {
         case Sys::KernelType::Darwin: {
-            if(info.kernelMajor >= 17) {
-                // macOS 10.13 or newer
-                return "osx64-5.15.2";
-            }
-            else {
-                // macOS 10.12 or older
-                return "osx64";
-            }
+            return "osx64-5.15.2";
         }
         case Sys::KernelType::Windows: {
             // FIXME: 5.15.2 is not stable on Windows, due to a large number of completely unpredictable and hard to reproduce issues
@@ -497,7 +492,9 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
      * If there is one, tell it what the user actually wanted to do and exit.
      * We want to initialize this before logging to avoid messing with the log of a potential already running copy.
      */
-    auto appID = ApplicationId::fromPathAndVersion(QDir::currentPath(), BuildConfig.printableVersionString());
+    // with the platform: switching variants installs the same build for another one, and the new
+    // process must not take the old one, still waiting for it to start, for itself
+    auto appID = ApplicationId::fromPathAndVersion(QDir::currentPath(), BuildConfig.printableVersionString() + " on " + BuildConfig.BUILD_PLATFORM);
     {
         // FIXME: you can run the same binaries with multiple data dirs and they won't clash. This could cause issues for updates.
         m_peerInstance = new LocalPeer(this, appID);
@@ -605,6 +602,17 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
         qDebug() << "Version                    : " << BuildConfig.printableVersionString();
         qDebug() << "Git commit                 : " << BuildConfig.GIT_COMMIT;
         qDebug() << "Git refspec                : " << BuildConfig.GIT_REFSPEC;
+        {
+            auto system = SystemRequirements::detect();
+            qDebug() << "Operating system           : " << system.os << system.osVersion;
+            qDebug() << "Machine architecture       : " << system.machineArch;
+            qDebug() << "Launcher architecture      : " << system.launcherArch;
+            if(!system.glibc.isEmpty() || !system.glibcxx.isEmpty())
+            {
+                qDebug() << "glibc, GLIBCXX             : " << system.glibc << system.glibcxx;
+            }
+            qDebug() << "Qt version                 : " << system.qt;
+        }
         if (adjustedBy.size())
         {
             qDebug() << "Work dir before adjustment : " << origcwdPath;
@@ -658,13 +666,35 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
         m_settings.reset(new INISettingsObject(BuildConfig.LAUNCHER_CONFIGFILE, this));
         // Updates
         m_settings->registerSetting("AutoUpdate", true);
+        // Updater v2's tier: latest, testing or stable. Not the old channel setting, which
+        // develop users have and would put them on Latest. Empty until it is chosen (in the
+        // setup wizard, UpdatesWizardPage); until then it is Stable.
+        m_settings->registerSetting("UpdateTier", QString());
+        // Updater v2's variant the user chose to stay on or go back to; empty: none, the
+        // Launcher moves along `supersedes` (Design/UpdaterFormats.md)
+        m_settings->registerSetting("UpdateVariant", QString());
+        // the last build an automatic check said can't be installed here, so it's said once
+        m_settings->registerSetting("UpdateNotPossibleBuild", 0);
+        // updater v2's checks, to notice that they keep failing (UpdaterV2::CheckHistory):
+        // when one last got a verified answer, when they started failing, and how many have
+        // failed since (times in seconds since 1970, 0 for none)
+        m_settings->registerSetting("UpdateLastSuccess", 0);
+        m_settings->registerSetting("UpdateFailingSince", 0);
+        m_settings->registerSetting("UpdateFailedChecks", 0);
 
         // Theming
-        m_settings->registerSetting("IconTheme", QString("multimc"));
-        m_settings->registerSetting("ApplicationTheme", QString("system"));
+        m_settings->registerSetting("IconTheme", QString("pe_colored"));
+        // ThemeManager's; empty until chosen (in the setup wizard, ThemeWizardPage), then the
+        // defaults apply. Not the old ApplicationTheme, whose System was the platform's style.
+        m_settings->registerSetting("Theme", QString());
+        m_settings->registerSetting("ThemeStyle", QString());
+        m_settings->registerSetting("AccentSource", QString());
+        m_settings->registerSetting("AccentColor", QString());
 
         // Notifications
         m_settings->registerSetting("ShownNotifications", QString());
+        // questions with a "Don't ask again" (brought back by "Reset hidden notifications")
+        m_settings->registerSetting("ConfirmLogClear", true);
 
         // Remembered state
         m_settings->registerSetting("LastUsedGroupForNewInstance", QString());
@@ -700,6 +730,7 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
         m_settings->registerSetting("InstanceDir", "instances");
         m_settings->registerSetting({"CentralModsDir", "ModsDir"}, "mods");
         m_settings->registerSetting("IconsDir", "icons");
+        m_settings->registerSetting("SkinsDir", "skins");
 
         // Editors
         m_settings->registerSetting("JsonEditor", QString());
@@ -755,6 +786,9 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
         // Minecraft offline player name
         m_settings->registerSetting("LastOfflinePlayerName", "");
 
+        // The user's own Microsoft client ID, for builds that don't ship one (see msaClientId())
+        m_settings->registerSetting("MSAClientID", "");
+
         // Wrapper command for launch
         m_settings->registerSetting("WrapperCommand", "");
 
@@ -783,28 +817,27 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
 
         m_settings->registerSetting("UpdateDialogGeometry", "");
 
+        m_settings->registerSetting("AccountsDialogGeometry", "");
+        m_settings->registerSetting("AccountsDialogSplitterState", "");
+
         // paste.ee API key
         m_settings->registerSetting("PasteEEAPIKey", "multimc");
-
-        if(!BuildConfig.ANALYTICS_ID.isEmpty())
-        {
-            // Analytics
-            m_settings->registerSetting("Analytics", true);
-            m_settings->registerSetting("AnalyticsSeen", 0);
-            m_settings->registerSetting("AnalyticsClientID", QString());
-        }
 
         // Init page provider
         {
             m_globalSettingsProvider = std::make_shared<GenericPageProvider>(tr("Settings"));
             m_globalSettingsProvider->addPage<LauncherPage>();
+            m_globalSettingsProvider->addPage<AppearancePage>();
+            if(BuildConfig.UPDATER_ENABLED && BuildConfig.UPDATER_VERSION == 2)
+            {
+                m_globalSettingsProvider->addPage<UpdatesPage>();
+            }
             m_globalSettingsProvider->addPage<MinecraftPage>();
             m_globalSettingsProvider->addPage<JavaPage>();
             m_globalSettingsProvider->addPage<LanguagePage>();
             m_globalSettingsProvider->addPage<CustomCommandsPage>();
             m_globalSettingsProvider->addPage<ProxyPage>();
             m_globalSettingsProvider->addPage<ExternalToolsPage>();
-            m_globalSettingsProvider->addPage<AccountListPage>();
             m_globalSettingsProvider->addPage<PasteEEPage>();
         }
         qDebug() << "<> Settings loaded.";
@@ -836,12 +869,33 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
     }
 
     // initialize the updater
-    if(BuildConfig.UPDATER_ENABLED)
+    if(BuildConfig.UPDATER_ENABLED && BuildConfig.UPDATER_VERSION == 2)
+    {
+        UpdaterV2::Config config;
+        config.site = BuildConfig.FILES_MIRRORS.first();
+        config.rootKeys = BuildConfig.UPDATER_ROOT_KEYS;
+        config.floorKeys = BuildConfig.UPDATER_KEYS_FLOOR;
+        config.serialFloor = BuildConfig.UPDATER_SERIAL_FLOOR;
+        config.variant = BuildConfig.UPDATER_VARIANT;
+        config.currentBuild = BuildConfig.VERSION_BUILD;
+        // next to the Launcher's settings
+        config.statePath = QDir("updater").absoluteFilePath("state.json");
+        config.system = SystemRequirements::detect();
+        m_updaterV2.reset(new UpdaterV2::Checker(m_network, config));
+        auto setting = m_settings->getSetting("UpdateVariant");
+        m_updaterV2->setPreferredVariant(setting->get().toString());
+        connect(setting.get(), &Setting::SettingChanged, [&](const Setting &, QVariant value)
+        {
+            m_updaterV2->setPreferredVariant(value.toString());
+        });
+        qDebug() << "<> Updater v2 started.";
+    }
+    else if(BuildConfig.UPDATER_ENABLED)
     {
         auto platform = getIdealPlatform(BuildConfig.BUILD_PLATFORM);
         auto channelUrl = BuildConfig.UPDATER_BASE + platform + "/channels.json";
         qDebug() << "Initializing updater with platform: " << platform << " -- " << channelUrl;
-        m_updateChecker.reset(new UpdateChecker(m_network, channelUrl, BuildConfig.VERSION_BUILD));
+        m_updateChecker.reset(new UpdaterV1::UpdateChecker(m_network, channelUrl, BuildConfig.VERSION_BUILD));
         qDebug() << "<> Updater started.";
     }
 
@@ -870,21 +924,28 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
         auto searchPaths = QIcon::themeSearchPaths();
         searchPaths.append("iconthemes");
         QIcon::setThemeSearchPaths(searchPaths);
+        // custom icon themes needn't have every icon (the mod platforms' logos, say), and
+        // often inherit from themes the launcher doesn't have: the rest come from ours
+        XdgIcon::setFallbackThemeName("multimc");
         qDebug() << "<> Icon themes initialized.";
     }
 
     // Initialize widget themes
     {
-        auto insertTheme = [this](ITheme * theme)
-        {
-            m_themes.insert(std::make_pair(theme->id(), std::unique_ptr<ITheme>(theme)));
-        };
-        auto darkTheme = new DarkTheme();
-        insertTheme(new SystemTheme());
-        insertTheme(darkTheme);
-        insertTheme(new BrightTheme());
-        insertTheme(new CustomTheme(darkTheme, "custom"));
+        m_themeManager.reset(new ThemeManager(m_settings));
+        installEventFilter(new TitleBarWatcher(this));
         qDebug() << "<> Widget themes initialized.";
+    }
+
+    // Skins
+    {
+        auto setting = APPLICATION->settings()->getSetting("SkinsDir");
+        m_skinsModel.reset(new SkinsModel(setting->get().toString()));
+        connect(setting.get(), &Setting::SettingChanged,[&](const Setting &, QVariant value)
+        {
+            m_skinsModel->directoryChanged(value.toString());
+        });
+        qDebug() << "<> Skins intialized.";
     }
 
     // initialize and load all instances
@@ -981,51 +1042,9 @@ Application::Application(int &argc, char **argv) : QApplication(argc, argv)
     {
         setIconTheme(settings()->get("IconTheme").toString());
         qDebug() << "<> Icon theme set.";
-        setApplicationTheme(settings()->get("ApplicationTheme").toString(), true);
+        m_themeManager->apply(m_themeManager->savedChoice());
         qDebug() << "<> Application theme set.";
     }
-
-    // Initialize analytics
-    /*
-    [this]()
-    {
-        const int analyticsVersion = 2;
-        if(BuildConfig.ANALYTICS_ID.isEmpty())
-        {
-            return;
-        }
-
-        auto analyticsSetting = m_settings->getSetting("Analytics");
-        connect(analyticsSetting.get(), &Setting::SettingChanged, this, &Application::analyticsSettingChanged);
-        QString clientID = m_settings->get("AnalyticsClientID").toString();
-        if(clientID.isEmpty())
-        {
-            clientID = QUuid::createUuid().toString();
-            clientID.remove(QLatin1Char('{'));
-            clientID.remove(QLatin1Char('}'));
-            m_settings->set("AnalyticsClientID", clientID);
-        }
-        m_analytics = new GAnalytics(BuildConfig.ANALYTICS_ID, clientID, analyticsVersion, this);
-        m_analytics->setLogLevel(GAnalytics::Debug);
-        m_analytics->setAnonymizeIPs(true);
-        // FIXME: the ganalytics library has no idea about our fancy shared pointers...
-        m_analytics->setNetworkAccessManager(network().get());
-
-        if(m_settings->get("AnalyticsSeen").toInt() < m_analytics->version())
-        {
-            qDebug() << "Analytics info not seen by user yet (or old version).";
-            return;
-        }
-        if(!m_settings->get("Analytics").toBool())
-        {
-            qDebug() << "Analytics disabled by user.";
-            return;
-        }
-
-        m_analytics->enable();
-        qDebug() << "<> Initialized analytics with tid" << BuildConfig.ANALYTICS_ID;
-    }();
-    */
 
     if(createSetupWizard())
     {
@@ -1053,29 +1072,18 @@ bool Application::createSetupWizard()
         }
         return false;
     }();
-    bool analyticsRequired = [&]()
-    {
-        if(!m_analytics) {
-            return false;
-        }
-        if(BuildConfig.ANALYTICS_ID.isEmpty()) {
-            return false;
-        }
-        if (!settings()->get("Analytics").toBool()) {
-            return false;
-        }
-        if (settings()->get("AnalyticsSeen").toInt() < analytics()->version()) {
-            return true;
-        }
-        return false;
-    }();
     bool languageRequired = [&]()
     {
         if (settings()->get("Language").toString().isEmpty())
             return true;
         return false;
     }();
-    bool wizardRequired = javaRequired || analyticsRequired || languageRequired;
+    // updater v2's tier, until it is chosen; existing installs choose once too
+    bool updatesRequired = BuildConfig.UPDATER_ENABLED && BuildConfig.UPDATER_VERSION == 2
+        && settings()->get("UpdateTier").toString().isEmpty();
+    // the theme, until it is chosen; existing installs choose once too
+    bool themeRequired = !m_themeManager->themeChosen();
+    bool wizardRequired = javaRequired || languageRequired || updatesRequired || themeRequired;
 
     if(wizardRequired)
     {
@@ -1084,13 +1092,17 @@ bool Application::createSetupWizard()
         {
             m_setupWizard->addPage(new LanguageWizardPage(m_setupWizard));
         }
+        if (themeRequired)
+        {
+            m_setupWizard->addPage(new ThemeWizardPage(m_setupWizard));
+        }
+        if (updatesRequired)
+        {
+            m_setupWizard->addPage(new UpdatesWizardPage(m_setupWizard));
+        }
         if (javaRequired)
         {
             m_setupWizard->addPage(new JavaWizardPage(m_setupWizard));
-        }
-        if(analyticsRequired)
-        {
-            m_setupWizard->addPage(new AnalyticsWizardPage(m_setupWizard));
         }
         connect(m_setupWizard, &QDialog::finished, this, &Application::setupWizardFinished);
         m_setupWizard->show();
@@ -1133,8 +1145,8 @@ void Application::performMainStartupAction()
 
             if(!m_profileToUse.isEmpty())
             {
-                accountToUse = accounts()->getAccountByProfileName(m_profileToUse);
-                if(!accountToUse) {
+                int dummyRow;
+                if(!accounts()->getAccountByProfileName(m_profileToUse, accountToUse, dummyRow)) {
                     return;
                 }
                 qDebug() << "   Launching with account" << m_profileToUse;
@@ -1239,8 +1251,8 @@ void Application::messageReceived(const QByteArray& message)
 
         MinecraftAccountPtr accountObject;
         if(!profile.isEmpty()) {
-            accountObject = accounts()->getAccountByProfileName(profile);
-            if(!accountObject) {
+            int dummyRow;
+            if(!accounts()->getAccountByProfileName(profile, accountObject, dummyRow)) {
                 qWarning() << "Launch command requires the specified profile to be valid. " << profile << "does not resolve to any account.";
                 return;
             }
@@ -1261,22 +1273,6 @@ void Application::messageReceived(const QByteArray& message)
     }
 }
 
-void Application::analyticsSettingChanged(const Setting&, QVariant value)
-{
-    if(!m_analytics)
-        return;
-    bool enabled = value.toBool();
-    if(enabled)
-    {
-        qDebug() << "Analytics enabled by user.";
-    }
-    else
-    {
-        qDebug() << "Analytics disabled by user.";
-    }
-    m_analytics->enable(enabled);
-}
-
 std::shared_ptr<TranslationsModel> Application::translations()
 {
     return m_translations;
@@ -1291,36 +1287,14 @@ std::shared_ptr<JavaInstallList> Application::javalist()
     return m_javalist;
 }
 
-std::vector<ITheme *> Application::getValidApplicationThemes()
-{
-    std::vector<ITheme *> ret;
-    auto iter = m_themes.cbegin();
-    while (iter != m_themes.cend())
-    {
-        ret.push_back((*iter).second.get());
-        iter++;
-    }
-    return ret;
-}
-
-void Application::setApplicationTheme(const QString& name, bool initial)
-{
-    auto systemPalette = qApp->palette();
-    auto themeIter = m_themes.find(name);
-    if(themeIter != m_themes.end())
-    {
-        auto & theme = (*themeIter).second;
-        theme->apply(initial);
-    }
-    else
-    {
-        qWarning() << "Tried to set invalid theme:" << name;
-    }
-}
-
 void Application::setIconTheme(const QString& name)
 {
     XdgIcon::setThemeName(name);
+    // icons load again from the new theme when they are painted next
+    for(auto widget: QApplication::allWidgets())
+    {
+        widget->update();
+    }
 }
 
 QIcon Application::getThemedIcon(const QString& name)
@@ -1336,7 +1310,7 @@ bool Application::openJsonEditor(const QString &filename)
     const QString file = QDir::current().absoluteFilePath(filename);
     if (m_settings->get("JsonEditor").toString().isEmpty())
     {
-        return DesktopServices::openUrl(QUrl::fromLocalFile(file));
+        return DesktopServices::openFile(file);
     }
     else
     {
@@ -1522,6 +1496,13 @@ void Application::ShowGlobalSettings(class QWidget* parent, QString open_page)
     emit globalSettingsClosed();
 }
 
+void Application::ShowAccountsDialog(class QWidget* parent)
+{
+    AccountsDialog dialog(parent);
+    dialog.exec();
+}
+
+
 MainWindow* Application::showMainWindow(bool minimized)
 {
     if(m_mainWindow)
@@ -1544,64 +1525,10 @@ MainWindow* Application::showMainWindow(bool minimized)
             m_mainWindow->show();
         }
 
-        m_mainWindow->checkInstancePathForProblems();
+        QTimer::singleShot(0, m_mainWindow, &MainWindow::startupChecks);
         connect(this, &Application::updateAllowedChanged, m_mainWindow, &MainWindow::updatesAllowedChanged);
         connect(m_mainWindow, &MainWindow::isClosing, this, &Application::on_windowClose);
         m_openWindows++;
-    }
-    // FIXME: move this somewhere else...
-    if(m_analytics)
-    {
-        auto windowSize = m_mainWindow->size();
-        auto sizeString = QString("%1x%2").arg(windowSize.width()).arg(windowSize.height());
-        qDebug() << "Viewport size" << sizeString;
-        m_analytics->setViewportSize(sizeString);
-        /*
-         * cm1 = java min heap [MB]
-         * cm2 = java max heap [MB]
-         * cm3 = system RAM [MB]
-         *
-         * cd1 = java version
-         * cd2 = java architecture
-         * cd3 = system architecture
-         * cd4 = CPU architecture
-         */
-        QVariantMap customValues;
-        int min = m_settings->get("MinMemAlloc").toInt();
-        int max = m_settings->get("MaxMemAlloc").toInt();
-        if(min < max)
-        {
-            customValues["cm1"] = min;
-            customValues["cm2"] = max;
-        }
-        else
-        {
-            customValues["cm1"] = max;
-            customValues["cm2"] = min;
-        }
-
-        constexpr uint64_t Mega = 1024ull * 1024ull;
-        int ramSize = int(Sys::getSystemRam() / Mega);
-        qDebug() << "RAM size is" << ramSize << "MB";
-        customValues["cm3"] = ramSize;
-
-        customValues["cd1"] = m_settings->get("JavaVersion");
-        customValues["cd2"] = m_settings->get("JavaArchitecture");
-        customValues["cd3"] = Sys::isSystem64bit() ? "64":"32";
-        customValues["cd4"] = Sys::isCPU64bit() ? "64":"32";
-        auto kernelInfo = Sys::getKernelInfo();
-        customValues["cd5"] = kernelInfo.kernelName;
-        customValues["cd6"] = kernelInfo.kernelVersion;
-        auto distInfo = Sys::getDistributionInfo();
-        if(!distInfo.distributionName.isEmpty())
-        {
-            customValues["cd7"] = distInfo.distributionName;
-        }
-        if(!distInfo.distributionVersion.isEmpty())
-        {
-            customValues["cd8"] = distInfo.distributionVersion;
-        }
-        m_analytics->sendScreenView("Main Window", customValues);
     }
     return m_mainWindow;
 }
@@ -1662,7 +1589,22 @@ void Application::on_windowClose()
 }
 
 QString Application::msaClientId() const {
-    return Secrets::getMSAClientID('-');
+    // Most specific first: the environment, then the config file, then what the build shipped with
+    // (nothing, unless whoever built this launcher baked one in).
+    // NOTE: qgetenv, not qEnvironmentVariable: the latter needs Qt 5.10, and we still build on 5.6.
+    const QString fromEnvironment = QString::fromLocal8Bit(qgetenv("ULTIMMC_MSA_CLIENT_ID")).trimmed();
+    if (!fromEnvironment.isEmpty()) {
+        return fromEnvironment;
+    }
+    const QString fromSettings = m_settings->get("MSAClientID").toString().trimmed();
+    if (!fromSettings.isEmpty()) {
+        return fromSettings;
+    }
+    return BuildConfig.MSA_CLIENT_ID;
+}
+
+bool Application::hasMsaClientId() const {
+    return !msaClientId().isEmpty();
 }
 
 void Application::updateProxySettings(QString proxyTypeStr, QString addr, int port, QString user, QString password)
@@ -1743,6 +1685,15 @@ shared_qobject_ptr<Meta::Index> Application::metadataIndex()
         m_metadataIndex.reset(new Meta::Index());
     }
     return m_metadataIndex;
+}
+
+shared_qobject_ptr<CapeCache> Application::capeCache()
+{
+    if (!m_capeCache)
+    {
+        m_capeCache.reset(new CapeCache(this));
+    }
+    return m_capeCache;
 }
 
 QString Application::getJarsPath()

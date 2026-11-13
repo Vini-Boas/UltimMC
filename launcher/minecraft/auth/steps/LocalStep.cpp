@@ -12,11 +12,6 @@ QString LocalStep::describe()
     return tr("Creating local account.");
 }
 
-void LocalStep::rehydrate()
-{
-    // NOOP
-}
-
 void LocalStep::perform()
 {
     emit finished(AccountTaskState::STATE_WORKING, tr("Created local account."));

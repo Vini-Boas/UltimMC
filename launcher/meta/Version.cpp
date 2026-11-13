@@ -29,11 +29,11 @@ Meta::Version::~Version()
 {
 }
 
-QString Meta::Version::descriptor()
+QString Meta::Version::descriptor() const
 {
     return m_version;
 }
-QString Meta::Version::name()
+QString Meta::Version::name() const
 {
     if(m_data)
         return m_data->name;
@@ -82,6 +82,11 @@ void Meta::Version::mergeFromList(const Meta::VersionPtr& other)
     if(m_volatile != other->m_volatile)
     {
         setVolatile(other->m_volatile);
+    }
+    // a version file doesn't list its own hash, only the list does
+    if(!other->sha256().isEmpty())
+    {
+        setSha256(other->sha256());
     }
 }
 

@@ -33,7 +33,13 @@ CreateShortcutDialog::CreateShortcutDialog(QWidget *parent, InstancePtr instance
 
     for (int i = 0; i < accounts->count(); i++)
     {
-        accountNameList.append(accounts->at(i)->profileName());
+        auto entry = accounts->at(i);
+        // unsupported accounts (e.g. old Mojang ones) can't be used for a shortcut
+        if(!entry.isAccount || !entry.account->isSupported())
+        {
+            continue;
+        }
+        accountNameList.append(entry.account->profileName());
     }
 
     ui->profileComboBox->addItems(accountNameList);

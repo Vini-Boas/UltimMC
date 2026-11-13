@@ -40,8 +40,16 @@ class UpdateDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit UpdateDialog(bool hasUpdate = true, QWidget *parent = 0);
+    /// `target` is what the changelog compares this build with: a branch or a commit
+    explicit UpdateDialog(bool hasUpdate = true, QWidget *parent = 0, const QString &target = "develop");
     ~UpdateDialog();
+
+    /// The update moves to another variant, and the user may object: a checkbox with `text`, ticked
+    void offerVariantMove(const QString &text);
+    /// The update moves to another variant, and the user can't stay: `text` says why
+    void announceVariantMove(const QString &text);
+    /// Whether the checkbox from offerVariantMove() was left ticked
+    bool variantMoveAccepted() const;
 
 public slots:
     void on_btnUpdateNow_clicked();
@@ -64,4 +72,5 @@ private:
     QByteArray changelogData;
     NetJob::Ptr dljob;
     ChangelogType m_changelogType = CHANGELOG_MARKDOWN;
+    QString m_target;
 };

@@ -40,7 +40,7 @@ And an AUR package as [ultimmc-bin](https://aur.archlinux.org/packages/ultimmc-b
 3. Launch `UltimMC`.
 4. Go to account settings.
 6. A. Pick "Add Local" and you will be requested to use the username you desire, this can be anything.
-7. B. Pick "Add Ely.by" and add your Ely.by account by putting your email and password.
+7. B. Pick "Add Ely.by" and add your Ely.by account by putting your username and password.
 8. Save it.
 9. Now enjoy the Launcher.
 
@@ -50,12 +50,20 @@ To update the launcher replace all replaceable files and folders with the newer 
 
 A better update system is in the works.
 
-## Forking
+## Microsoft accounts
 
-This project now includes our MSA API key in order to have functional Microsoft authentication within the launcher.
+This build does **not** ship a Microsoft client ID, so Microsoft login is off until you provide your own.
+Local and Ely.by accounts work without it.
 
-This means you're accepting the:
+1. Register an application in [Microsoft Entra](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app) for personal accounts, with no redirect URI and "public client flows" enabled.
+2. Give the launcher its client ID, in either of these ways:
+   - set `MSAClientID=<your client ID>` in the launcher's config file (`ultimmc.cfg`), or
+   - set the `ULTIMMC_MSA_CLIENT_ID` environment variable (it takes priority over the config file).
+3. Restart the launcher.
 
-- [Microsoft Identity Platform Terms of Use](https://learn.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use)
+Using a client ID means you accept the [Microsoft Identity Platform Terms of Use](https://learn.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use).
+Mojang may also require your application to be approved before Minecraft login works; this is outside the launcher's control.
 
-We humbly ask that in case you wish to fork UltimMC, please either remove the key by setting it empty (`""`) or by setting your own.
+Accounts you already have stay saved while no ID is set. They are simply not refreshed or launched until one is provided.
+
+People distributing their own builds can bake an ID in with `-DLauncher_MSA_CLIENT_ID=<id>`.

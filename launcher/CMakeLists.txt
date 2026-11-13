@@ -86,7 +86,21 @@ set(CORE_SOURCES
     # Time
     MMCTime.h
     MMCTime.cpp
+
+    # Colour arithmetic (luminance, contrast, mixing)
+    Colors.h
+    Colors.cpp
 )
+
+add_unit_test(Colors
+    SOURCES Colors_test.cpp
+    LIBS Launcher_logic
+    )
+
+add_unit_test(Download
+    SOURCES net/Download_test.cpp
+    LIBS Launcher_logic
+    )
 
 add_unit_test(FileSystem
     SOURCES FileSystem_test.cpp
@@ -94,8 +108,38 @@ add_unit_test(FileSystem
     DATA testdata
     )
 
+add_unit_test(MMCZip
+    SOURCES MMCZip_test.cpp
+    LIBS Launcher_logic
+    )
+
+add_unit_test(ThemeArchive
+    SOURCES ui/themes/ThemeArchive_test.cpp
+    LIBS Launcher_logic
+    )
+
+add_unit_test(ThemeWriter
+    SOURCES ui/themes/ThemeWriter_test.cpp
+    LIBS Launcher_logic
+    )
+
 add_unit_test(GZip
     SOURCES GZip_test.cpp
+    LIBS Launcher_logic
+    )
+
+add_unit_test(Json
+    SOURCES Json_test.cpp
+    LIBS Launcher_logic
+    )
+
+add_unit_test(AccountList
+    SOURCES minecraft/auth/AccountList_test.cpp
+    LIBS Launcher_logic
+    )
+
+add_unit_test(ElybyTextures
+    SOURCES minecraft/auth/ElybyTextures_test.cpp
     LIBS Launcher_logic
     )
 
@@ -125,6 +169,9 @@ set(NET_SOURCES
     net/PasteUpload.cpp
     net/PasteUpload.h
     net/Sink.h
+    net/SizeValidator.h
+    net/Mirrors.h
+    net/Mirrors.cpp
     net/Validator.h
 )
 
@@ -150,26 +197,114 @@ set(LAUNCH_SOURCES
     launch/LogModel.h
 )
 
-# Old update system
+# Updater v1
 set(UPDATE_SOURCES
-    updater/GoUpdate.h
-    updater/GoUpdate.cpp
-    updater/UpdateChecker.h
-    updater/UpdateChecker.cpp
-    updater/DownloadTask.h
-    updater/DownloadTask.cpp
+    updater/v1/UpdateController.h
+    updater/v1/UpdateController.cpp
+    updater/v1/GoUpdate.h
+    updater/v1/GoUpdate.cpp
+    updater/v1/UpdateChecker.h
+    updater/v1/UpdateChecker.cpp
+    updater/v1/DownloadTask.h
+    updater/v1/DownloadTask.cpp
+
+    # both updaters: waiting for the new build to start
+    updater/LiveCheck.h
+    updater/LiveCheck.cpp
 )
 
-add_unit_test(UpdateChecker
-    SOURCES updater/UpdateChecker_test.cpp
+# Updater v2 (Design/Updater.md in the MultiMC repository): used only by builds made with Launcher_UPDATER_VERSION 2
+set(NEW_UPDATE_SOURCES
+    updater/v2/Signature.h
+    updater/v2/Signature.cpp
+    updater/v2/SystemRequirements.h
+    updater/v2/SystemRequirements.cpp
+    updater/v2/Formats.h
+    updater/v2/Formats.cpp
+    updater/v2/State.h
+    updater/v2/State.cpp
+    updater/v2/Plan.h
+    updater/v2/Plan.cpp
+    updater/v2/Install.h
+    updater/v2/Install.cpp
+    updater/v2/InstallController.h
+    updater/v2/InstallController.cpp
+    updater/v2/Checker.h
+    updater/v2/Checker.cpp
+    updater/v2/CheckHistory.h
+    updater/v2/CheckHistory.cpp
+    updater/v2/DownloadTask.h
+    updater/v2/DownloadTask.cpp
+)
+
+add_unit_test(UpdaterLiveCheck
+    SOURCES updater/LiveCheck_test.cpp
     LIBS Launcher_logic
-    DATA updater/testdata
     )
 
-add_unit_test(DownloadTask
-    SOURCES updater/DownloadTask_test.cpp
+add_unit_test(UpdaterV1UpdateChecker
+    SOURCES updater/v1/UpdateChecker_test.cpp
     LIBS Launcher_logic
-    DATA updater/testdata
+    DATA updater/v1/testdata
+    )
+
+add_unit_test(UpdaterV1DownloadTask
+    SOURCES updater/v1/DownloadTask_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v1/testdata
+    )
+
+add_unit_test(UpdaterV2Signature
+    SOURCES updater/v2/Signature_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v2/testdata
+    )
+
+add_unit_test(UpdaterV2SystemRequirements
+    SOURCES updater/v2/SystemRequirements_test.cpp
+    LIBS Launcher_logic
+    )
+
+# test trees made by updater/v2/make-test-trees.py
+add_unit_test(UpdaterV2Formats
+    SOURCES updater/v2/Formats_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v2/testdata
+    )
+
+add_unit_test(UpdaterV2State
+    SOURCES updater/v2/State_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v2/testdata
+    )
+
+add_unit_test(UpdaterV2Plan
+    SOURCES updater/v2/Plan_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v2/testdata
+    )
+
+add_unit_test(UpdaterV2Install
+    SOURCES updater/v2/Install_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v2/testdata
+    )
+
+add_unit_test(UpdaterV2Checker
+    SOURCES updater/v2/Checker_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v2/testdata
+    )
+
+add_unit_test(UpdaterV2CheckHistory
+    SOURCES updater/v2/CheckHistory_test.cpp
+    LIBS Launcher_logic
+    )
+
+add_unit_test(UpdaterV2DownloadTask
+    SOURCES updater/v2/DownloadTask_test.cpp
+    LIBS Launcher_logic
+    DATA updater/v2/testdata
     )
 
 # Rarely used notifications
@@ -214,21 +349,21 @@ set(MINECRAFT_SOURCES
     minecraft/auth/AuthStep.h
     minecraft/auth/MinecraftAccount.cpp
     minecraft/auth/MinecraftAccount.h
+    minecraft/auth/ElybyTextures.cpp
+    minecraft/auth/ElybyTextures.h
     minecraft/auth/Parsers.cpp
     minecraft/auth/Parsers.h
-    minecraft/auth/Yggdrasil.cpp
-    minecraft/auth/Yggdrasil.h
 
     minecraft/auth/providers/BaseAuthProvider.h
+    minecraft/auth/providers/LocalAuthProvider.cpp
     minecraft/auth/providers/LocalAuthProvider.h
+    minecraft/auth/providers/ElybyAuthProvider.cpp
     minecraft/auth/providers/ElybyAuthProvider.h
-    minecraft/auth/providers/MojangAuthProvider.h
+    minecraft/auth/providers/MicrosoftAuthProvider.cpp
     minecraft/auth/providers/MicrosoftAuthProvider.h
 
     minecraft/auth/flows/AuthFlow.cpp
     minecraft/auth/flows/AuthFlow.h
-    minecraft/auth/flows/Mojang.cpp
-    minecraft/auth/flows/Mojang.h
     minecraft/auth/flows/MSA.cpp
     minecraft/auth/flows/MSA.h
     minecraft/auth/flows/Local.cpp
@@ -236,18 +371,17 @@ set(MINECRAFT_SOURCES
     minecraft/auth/flows/Elyby.cpp
     minecraft/auth/flows/Elyby.h
 
+    # Auth steps
     minecraft/auth/steps/EntitlementsStep.cpp
     minecraft/auth/steps/EntitlementsStep.h
-    minecraft/auth/steps/ForcedMigrationStep.cpp
-    minecraft/auth/steps/ForcedMigrationStep.h
     minecraft/auth/steps/GetSkinStep.cpp
     minecraft/auth/steps/GetSkinStep.h
     minecraft/auth/steps/LauncherLoginStep.cpp
     minecraft/auth/steps/LauncherLoginStep.h
-    minecraft/auth/steps/MigrationEligibilityStep.cpp
-    minecraft/auth/steps/MigrationEligibilityStep.h
     minecraft/auth/steps/MinecraftProfileStep.cpp
     minecraft/auth/steps/MinecraftProfileStep.h
+    minecraft/auth/steps/ElybyAuthStep.cpp
+    minecraft/auth/steps/ElybyAuthStep.h
     minecraft/auth/steps/ElybyProfileStep.cpp
     minecraft/auth/steps/ElybyProfileStep.h
     minecraft/auth/steps/MSAStep.cpp
@@ -260,8 +394,14 @@ set(MINECRAFT_SOURCES
     minecraft/auth/steps/XboxProfileStep.h
     minecraft/auth/steps/XboxUserStep.cpp
     minecraft/auth/steps/XboxUserStep.h
-    minecraft/auth/steps/YggdrasilStep.cpp
-    minecraft/auth/steps/YggdrasilStep.h
+
+    # API call steps
+    minecraft/auth/steps/SetSkinStep.cpp
+    minecraft/auth/steps/SetSkinStep.h
+    minecraft/auth/steps/SetCapeStep.cpp
+    minecraft/auth/steps/SetCapeStep.h
+    minecraft/auth/steps/MinecraftProfileCreateStep.cpp
+    minecraft/auth/steps/MinecraftProfileCreateStep.h
 
     minecraft/gameoptions/GameOptions.h
     minecraft/gameoptions/GameOptions.cpp
@@ -363,14 +503,6 @@ set(MINECRAFT_SOURCES
     # Assets
     minecraft/AssetsUtils.h
     minecraft/AssetsUtils.cpp
-
-    # Minecraft services
-    minecraft/services/CapeChange.cpp
-    minecraft/services/CapeChange.h
-    minecraft/services/SkinUpload.cpp
-    minecraft/services/SkinUpload.h
-    minecraft/services/SkinDelete.cpp
-    minecraft/services/SkinDelete.h
 
     mojang/PackageManifest.h
     mojang/PackageManifest.cpp
@@ -505,6 +637,8 @@ set(META_SOURCES
     meta/JsonFormat.h
     meta/BaseEntity.cpp
     meta/BaseEntity.h
+    meta/UpdateStep.cpp
+    meta/UpdateStep.h
     meta/VersionList.cpp
     meta/VersionList.h
     meta/Version.cpp
@@ -558,6 +692,11 @@ add_unit_test(Index
     LIBS Launcher_logic
     )
 
+add_unit_test(UpdateStep
+    SOURCES meta/UpdateStep_test.cpp
+    LIBS Launcher_logic
+    )
+
 ################################ COMPILE ################################
 
 # we need zlib
@@ -569,6 +708,7 @@ set(LOGIC_SOURCES
     ${NET_SOURCES}
     ${LAUNCH_SOURCES}
     ${UPDATE_SOURCES}
+    ${NEW_UPDATE_SOURCES}
     ${NOTIFICATIONS_SOURCES}
     ${NEWS_SOURCES}
     ${MINECRAFT_SOURCES}
@@ -591,8 +731,6 @@ SET(LAUNCHER_SOURCES
     # Application base
     Application.h
     Application.cpp
-    UpdateController.cpp
-    UpdateController.h
     ApplicationMessage.h
     ApplicationMessage.cpp
 
@@ -607,24 +745,30 @@ SET(LAUNCHER_SOURCES
     KonamiCode.h
     KonamiCode.cpp
 
-    # Bundled resources
-    resources/backgrounds/backgrounds.qrc
-    resources/multimc/multimc.qrc
-    resources/pe_dark/pe_dark.qrc
-    resources/pe_light/pe_light.qrc
-    resources/pe_colored/pe_colored.qrc
-    resources/pe_blue/pe_blue.qrc
-    resources/OSX/OSX.qrc
-    resources/iOS/iOS.qrc
-    resources/flat/flat.qrc
-    resources/documents/documents.qrc
-    ../${Launcher_Branding_LogoQRC}
-
     # Icons
     icons/MMCIcon.h
     icons/MMCIcon.cpp
     icons/IconList.h
     icons/IconList.cpp
+
+    # Skins
+    skins/CapeCache.h
+    skins/CapeCache.cpp
+    skins/CapesModel.h
+    skins/CapesModel.cpp
+    skins/SkinsModel.h
+    skins/SkinsModel.cpp
+    skins/SkinRenderer.h
+    skins/SkinRenderer.cpp
+    skins/SkinWidget.h
+    skins/SkinWidget.cpp
+    skins/SkinTypes.h
+    skins/SkinTypes.cpp
+    skins/SkinUtils.h
+    skins/SkinUtils.cpp
+    skins/TextureMappings.h
+    skins/TextureMappings.cpp
+
 
     # GUI - windows
     ui/GuiUtil.h
@@ -636,34 +780,46 @@ SET(LAUNCHER_SOURCES
     ui/InstanceWindow.h
     ui/InstanceWindow.cpp
 
-    # FIXME: maybe find a better home for this.
-    SkinUtils.cpp
-    SkinUtils.h
-
     # GUI - setup wizard
     ui/setupwizard/SetupWizard.h
     ui/setupwizard/SetupWizard.cpp
-    ui/setupwizard/AnalyticsWizardPage.cpp
-    ui/setupwizard/AnalyticsWizardPage.h
     ui/setupwizard/BaseWizardPage.h
     ui/setupwizard/JavaWizardPage.cpp
     ui/setupwizard/JavaWizardPage.h
     ui/setupwizard/LanguageWizardPage.cpp
     ui/setupwizard/LanguageWizardPage.h
+    ui/setupwizard/ThemeWizardPage.cpp
+    ui/setupwizard/ThemeWizardPage.h
+    ui/setupwizard/UpdatesWizardPage.cpp
+    ui/setupwizard/UpdatesWizardPage.h
 
     # GUI - themes
-    ui/themes/FusionTheme.cpp
-    ui/themes/FusionTheme.h
     ui/themes/BrightTheme.cpp
     ui/themes/BrightTheme.h
     ui/themes/CustomTheme.cpp
     ui/themes/CustomTheme.h
     ui/themes/DarkTheme.cpp
     ui/themes/DarkTheme.h
-    ui/themes/ITheme.cpp
+    ui/themes/FusionStyle.cpp
+    ui/themes/FusionStyle.h
     ui/themes/ITheme.h
+    ui/themes/ReuseInfo.cpp
+    ui/themes/ReuseInfo.h
     ui/themes/SystemTheme.cpp
     ui/themes/SystemTheme.h
+    ui/themes/SystemAppearance.h
+    ui/themes/IconThemeList.cpp
+    ui/themes/IconThemeList.h
+    ui/themes/ThemeArchive.cpp
+    ui/themes/ThemeWriter.cpp
+    ui/themes/ThemeWriter.h
+    ui/themes/ThemeArchive.h
+    ui/themes/ThemeList.cpp
+    ui/themes/ThemeList.h
+    ui/themes/ThemeManager.cpp
+    ui/themes/ThemeManager.h
+    ui/themes/TitleBar.cpp
+    ui/themes/TitleBar.h
 
     # Processes
     LaunchController.h
@@ -709,8 +865,6 @@ SET(LAUNCHER_SOURCES
     ui/pages/instance/WorldListPage.h
 
     # GUI - global settings pages
-    ui/pages/global/AccountListPage.cpp
-    ui/pages/global/AccountListPage.h
     ui/pages/global/CustomCommandsPage.cpp
     ui/pages/global/CustomCommandsPage.h
     ui/pages/global/ExternalToolsPage.cpp
@@ -719,6 +873,10 @@ SET(LAUNCHER_SOURCES
     ui/pages/global/JavaPage.h
     ui/pages/global/LanguagePage.cpp
     ui/pages/global/LanguagePage.h
+    ui/pages/global/AppearancePage.cpp
+    ui/pages/global/AppearancePage.h
+    ui/pages/global/UpdatesPage.cpp
+    ui/pages/global/UpdatesPage.h
     ui/pages/global/MinecraftPage.cpp
     ui/pages/global/MinecraftPage.h
     ui/pages/global/LauncherPage.cpp
@@ -771,25 +929,25 @@ SET(LAUNCHER_SOURCES
 
     # GUI - dialogs
     ui/dialogs/AboutDialog.cpp
+    ui/dialogs/AccentColorDialog.cpp
+    ui/dialogs/ThemeEditorDialog.cpp
+    ui/dialogs/ThemeEditorDialog.h
+    ui/dialogs/AccentColorDialog.h
     ui/dialogs/AboutDialog.h
+    ui/dialogs/AccountsDialog.cpp
+    ui/dialogs/AccountsDialog.h
     ui/dialogs/ProfileSelectDialog.cpp
     ui/dialogs/ProfileSelectDialog.h
-    ui/dialogs/ProfileSetupDialog.cpp
-    ui/dialogs/ProfileSetupDialog.h
     ui/dialogs/CopyInstanceDialog.cpp
     ui/dialogs/CopyInstanceDialog.h
     ui/dialogs/CustomMessageBox.cpp
     ui/dialogs/CustomMessageBox.h
-    ui/dialogs/EditAccountDialog.cpp
-    ui/dialogs/EditAccountDialog.h
     ui/dialogs/ExportInstanceDialog.cpp
     ui/dialogs/ExportInstanceDialog.h
     ui/dialogs/IconPickerDialog.cpp
     ui/dialogs/IconPickerDialog.h
-    ui/dialogs/LoginDialog.cpp
-    ui/dialogs/LoginDialog.h
-    ui/dialogs/MSALoginDialog.cpp
-    ui/dialogs/MSALoginDialog.h
+    ui/dialogs/ElybyLoginDialog.cpp
+    ui/dialogs/ElybyLoginDialog.h
     ui/dialogs/LocalLoginDialog.cpp
     ui/dialogs/LocalLoginDialog.h
     ui/dialogs/NewComponentDialog.cpp
@@ -798,6 +956,8 @@ SET(LAUNCHER_SOURCES
     ui/dialogs/NewInstanceDialog.h
     ui/dialogs/NotificationDialog.cpp
     ui/dialogs/NotificationDialog.h
+    ui/dialogs/OfflineNameDialog.cpp
+    ui/dialogs/OfflineNameDialog.h
     ui/pagedialog/PageDialog.cpp
     ui/pagedialog/PageDialog.h
     ui/dialogs/ProgressDialog.cpp
@@ -806,8 +966,6 @@ SET(LAUNCHER_SOURCES
     ui/dialogs/UpdateDialog.h
     ui/dialogs/VersionSelectDialog.cpp
     ui/dialogs/VersionSelectDialog.h
-    ui/dialogs/SkinUploadDialog.cpp
-    ui/dialogs/SkinUploadDialog.h
     ui/dialogs/CreateShortcutDialog.cpp
     ui/dialogs/CreateShortcutDialog.h
     ui/dialogs/ModrinthExportDialog.cpp
@@ -830,6 +988,20 @@ SET(LAUNCHER_SOURCES
     ui/widgets/LabeledToolButton.h
     ui/widgets/LanguageSelectionWidget.cpp
     ui/widgets/LanguageSelectionWidget.h
+    ui/widgets/TierLever.cpp
+    ui/widgets/TierLever.h
+    ui/widgets/ConsolePreview.cpp
+    ui/widgets/ConsolePreview.h
+    ui/widgets/IconThemeSelectionWidget.cpp
+    ui/widgets/IconThemeSelectionWidget.h
+    ui/widgets/DetailRowDelegate.cpp
+    ui/widgets/DetailRowDelegate.h
+    ui/widgets/ThemePreview.cpp
+    ui/widgets/ThemePreview.h
+    ui/widgets/ThemeSelectionWidget.cpp
+    ui/widgets/ThemeSelectionWidget.h
+    ui/widgets/UpdateTierWidget.cpp
+    ui/widgets/UpdateTierWidget.h
     ui/widgets/LineSeparator.cpp
     ui/widgets/LineSeparator.h
     ui/widgets/LogView.cpp
@@ -849,6 +1021,8 @@ SET(LAUNCHER_SOURCES
     ui/widgets/ProgressWidget.cpp
     ui/widgets/WideBar.h
     ui/widgets/WideBar.cpp
+    ui/widgets/WrapLabel.h
+    ui/widgets/WrapLabel.cpp
 
     # GUI - instance group view
     ui/instanceview/InstanceProxyModel.cpp
@@ -864,54 +1038,64 @@ SET(LAUNCHER_SOURCES
     ui/instanceview/VisualGroup.h
 )
 
+# Native title bars that follow the theme, and the system's dark mode and accent
+if(WIN32)
+    list(APPEND LAUNCHER_SOURCES ui/themes/TitleBar_win.cpp ui/themes/SystemAppearance_win.cpp)
+elseif(APPLE)
+    list(APPEND LAUNCHER_SOURCES MacOS.h ui/themes/TitleBar_mac.mm ui/themes/SystemAppearance_mac.mm)
+else()
+    # the desktop portal, over D-Bus
+    find_package(Qt5DBus REQUIRED)
+    list(APPEND LAUNCHER_SOURCES ui/themes/TitleBar_other.cpp ui/themes/SystemAppearance_linux.cpp)
+endif()
+
 qt5_wrap_ui(LAUNCHER_UI
-    ui/pages/global/AccountListPage.ui
-    ui/pages/global/JavaPage.ui
-    ui/pages/global/LauncherPage.ui
-    ui/pages/global/PasteEEPage.ui
-    ui/pages/global/ProxyPage.ui
-    ui/pages/global/MinecraftPage.ui
-    ui/pages/global/ExternalToolsPage.ui
-    ui/pages/instance/ModFolderPage.ui
-    ui/pages/instance/NotesPage.ui
-    ui/pages/instance/LogPage.ui
-    ui/pages/instance/ServersPage.ui
-    ui/pages/instance/GameOptionsPage.ui
-    ui/pages/instance/OtherLogsPage.ui
-    ui/pages/instance/InstanceSettingsPage.ui
-    ui/pages/instance/VersionPage.ui
-    ui/pages/instance/WorldListPage.ui
-    ui/pages/instance/LegacyUpgradePage.ui
-    ui/pages/instance/ScreenshotsPage.ui
-    ui/pages/modplatform/atlauncher/AtlOptionalModDialog.ui
-    ui/pages/modplatform/atlauncher/AtlPage.ui
-    ui/pages/modplatform/VanillaPage.ui
-    ui/pages/modplatform/legacy_ftb/Page.ui
-    ui/pages/modplatform/import_ftb/FTBAPage.ui
-    ui/pages/modplatform/ImportPage.ui
-    ui/pages/modplatform/modrinth/ModrinthPage.ui
-    ui/pages/modplatform/technic/TechnicPage.ui
-    ui/widgets/InstanceCardWidget.ui
-    ui/widgets/CustomCommands.ui
-    ui/widgets/MCModInfoFrame.ui
+    ui/dialogs/AboutDialog.ui
+    ui/dialogs/AccountsDialog.ui
     ui/dialogs/CopyInstanceDialog.ui
-    ui/dialogs/ProfileSetupDialog.ui
-    ui/dialogs/ProgressDialog.ui
-    ui/dialogs/NewInstanceDialog.ui
-    ui/dialogs/NotificationDialog.ui
-    ui/dialogs/UpdateDialog.ui
-    ui/dialogs/NewComponentDialog.ui
-    ui/dialogs/ProfileSelectDialog.ui
-    ui/dialogs/SkinUploadDialog.ui
+    ui/dialogs/CreateShortcutDialog.ui
     ui/dialogs/ExportInstanceDialog.ui
     ui/dialogs/IconPickerDialog.ui
-    ui/dialogs/MSALoginDialog.ui
-    ui/dialogs/AboutDialog.ui
+    ui/dialogs/ElybyLoginDialog.ui
     ui/dialogs/LocalLoginDialog.ui
-    ui/dialogs/LoginDialog.ui
-    ui/dialogs/EditAccountDialog.ui
-    ui/dialogs/CreateShortcutDialog.ui
     ui/dialogs/ModrinthExportDialog.ui
+    ui/dialogs/NewComponentDialog.ui
+    ui/dialogs/NewInstanceDialog.ui
+    ui/dialogs/NotificationDialog.ui
+    ui/dialogs/ProfileSelectDialog.ui
+    ui/dialogs/ProgressDialog.ui
+    ui/dialogs/UpdateDialog.ui
+    ui/pages/global/ExternalToolsPage.ui
+    ui/pages/global/JavaPage.ui
+    ui/pages/global/LauncherPage.ui
+    ui/pages/global/MinecraftPage.ui
+    ui/pages/global/PasteEEPage.ui
+    ui/pages/global/ProxyPage.ui
+    ui/pages/instance/GameOptionsPage.ui
+    ui/pages/instance/InstanceSettingsPage.ui
+    ui/pages/instance/LegacyUpgradePage.ui
+    ui/pages/instance/LogPage.ui
+    ui/pages/instance/ModFolderPage.ui
+    ui/pages/instance/NotesPage.ui
+    ui/pages/instance/OtherLogsPage.ui
+    ui/pages/instance/ScreenshotsPage.ui
+    ui/pages/instance/ServersPage.ui
+    ui/pages/instance/VersionPage.ui
+    ui/pages/instance/WorldListPage.ui
+    ui/pages/modplatform/ImportPage.ui
+    ui/pages/modplatform/VanillaPage.ui
+    ui/pages/modplatform/atlauncher/AtlOptionalModDialog.ui
+    ui/pages/modplatform/atlauncher/AtlPage.ui
+    ui/pages/modplatform/import_ftb/FTBAPage.ui
+    ui/pages/modplatform/legacy_ftb/Page.ui
+    ui/pages/modplatform/modrinth/ModrinthPage.ui
+    ui/pages/modplatform/technic/TechnicPage.ui
+    ui/widgets/CustomCommands.ui
+    ui/widgets/CustomCommands.ui
+    ui/widgets/InstanceCardWidget.ui
+    ui/widgets/InstanceCardWidget.ui
+    ui/widgets/MCModInfoFrame.ui
+    ui/widgets/MCModInfoFrame.ui
 )
 
 qt5_add_resources(LAUNCHER_RESOURCES
@@ -925,12 +1109,13 @@ qt5_add_resources(LAUNCHER_RESOURCES
     resources/iOS/iOS.qrc
     resources/flat/flat.qrc
     resources/documents/documents.qrc
-    ../${Launcher_Branding_LogoQRC}
+    resources/skins/skins.qrc
+    ${Launcher_Branding_LogoQRC}
 )
 
 ######## Windows resource files ########
 if(WIN32)
-    set(LAUNCHER_RCS ../${Launcher_Branding_WindowsRC})
+    set(LAUNCHER_RCS ${Launcher_Branding_WindowsRC})
 endif()
 
 # Add executable
@@ -943,8 +1128,10 @@ target_link_libraries(Launcher_logic
     ${ZLIB_LIBRARIES}
     optional-bare
     tomlc99
+    monocypher
     BuildConfig
     Katabasis
+    qrcode
 )
 target_link_libraries(Launcher_logic
     Qt5::Core
@@ -957,12 +1144,13 @@ target_link_libraries(Launcher_logic
     Launcher_iconfix
     ${QUAZIP_LIBRARIES}
     hoedown
-    Launcher_rainbow
     LocalPeer
-    ganalytics
 )
-
-target_link_libraries(Launcher_logic secrets)
+if(APPLE)
+    target_link_libraries(Launcher_logic "-framework AppKit")
+elseif(NOT WIN32)
+    target_link_libraries(Launcher_logic Qt5::DBus)
+endif()
 
 add_executable(${Launcher_Name} MACOSX_BUNDLE WIN32 main.cpp ${LAUNCHER_RCS})
 target_link_libraries(${Launcher_Name} Launcher_logic)
@@ -1001,7 +1189,7 @@ if(INSTALL_BUNDLE STREQUAL "full")
             DIRECTORY "${QT_PLUGINS_DIR}/imageformats"
             DESTINATION ${PLUGIN_DEST_DIR}
             COMPONENT Runtime
-            REGEX "tga|tiff|mng|webp" EXCLUDE
+            REGEX "tga|tiff|mng" EXCLUDE
         )
         # Icon engines
         install(
@@ -1031,7 +1219,7 @@ if(INSTALL_BUNDLE STREQUAL "full")
             DIRECTORY "${QT_PLUGINS_DIR}/imageformats"
             DESTINATION ${PLUGIN_DEST_DIR}
             COMPONENT Runtime
-            REGEX "tga|tiff|mng|webp" EXCLUDE
+            REGEX "tga|tiff|mng" EXCLUDE
             REGEX "d\\." EXCLUDE
             REGEX "_debug\\." EXCLUDE
             REGEX "\\.dSYM" EXCLUDE

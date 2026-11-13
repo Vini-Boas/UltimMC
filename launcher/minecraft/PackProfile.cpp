@@ -289,6 +289,7 @@ bool PackProfile::load()
     ComponentContainer newComponents;
     if(!loadPackProfile(this, filename, patchesPattern(), newComponents))
     {
+        // FIXME: convert this to an error type?
         qCritical() << "Failed to load the component config for instance" << d->m_instance->name();
         return false;
     }
@@ -320,12 +321,12 @@ bool PackProfile::load()
     }
 }
 
-void PackProfile::reload(Net::Mode netmode)
+bool PackProfile::reload(Net::Mode netmode)
 {
     // Do not reload when the update/resolve task is running. It is in control.
     if(d->m_updateTask)
     {
-        return;
+        return true;
     }
 
     // flush any scheduled saves to not lose state
@@ -334,10 +335,13 @@ void PackProfile::reload(Net::Mode netmode)
     // FIXME: differentiate when a reapply is required by propagating state from components
     invalidateLaunchProfile();
 
-    if(load())
+    if(!load())
     {
-        resolve(netmode);
+        // FIXME: propagate reason for failure
+        return false;
     }
+    resolve(netmode);
+    return true;
 }
 
 Task::Ptr PackProfile::getCurrentTask()
@@ -664,7 +668,12 @@ bool PackProfile::remove(const int index)
         qWarning() << "Patch" << patch->getID() << "is non-removable";
         return false;
     }
+    return removeAt(index);
+}
 
+bool PackProfile::removeAt(const int index)
+{
+    auto patch = getComponent(index);
     if(!removeComponent_internal(patch))
     {
         qCritical() << "Patch" << patch->getID() << "could not be removed";
@@ -688,6 +697,25 @@ bool PackProfile::remove(const QString id)
         if (patch->getID() == id)
         {
             return remove(i);
+        }
+        i++;
+    }
+    return false;
+}
+
+bool PackProfile::removeDependency(const QString uid)
+{
+    int i = 0;
+    for (auto patch : d->components)
+    {
+        if (patch->getID() == uid)
+        {
+            if (!patch->m_dependencyOnly)
+            {
+                qWarning() << "Patch" << uid << "is not a dependency";
+                return false;
+            }
+            return removeAt(i);
         }
         i++;
     }
@@ -1210,6 +1238,26 @@ QString PackProfile::getComponentVersion(const QString& uid) const
     if (iter != d->componentIndex.end())
     {
         return (*iter)->getVersion();
+    }
+    if(d->components.isEmpty())
+    {
+        // Not loaded yet (that happens on launch or edit): read the version from the file
+        try
+        {
+            auto doc = Json::requireDocument(componentsFilePath(), "Components file");
+            auto components = Json::requireArray(Json::requireObject(doc), "components");
+            for(auto item: components)
+            {
+                auto obj = Json::requireObject(item);
+                if(Json::requireString(obj, "uid") == uid)
+                {
+                    return Json::ensureString(obj, "version");
+                }
+            }
+        }
+        catch (const Exception &)
+        {
+        }
     }
     return QString();
 }

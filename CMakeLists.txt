@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.10)
 
 if(WIN32)
     # In Qt 5.1+ we have our own main() function, don't autolink to qtmain on Windows
@@ -68,48 +68,84 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DQT_NO_DEPRECATED_WARNINGS=Y")
 ##################################### Set Application options #####################################
 
 ######## Set URLs ########
+set(Launcher_NEWS_URL "https://multimc.org/posts.html" CACHE STRING "URL to open Launcher's news.")
 set(Launcher_NEWS_RSS_URL "https://multimc.org/rss.xml" CACHE STRING "URL to fetch Launcher's news RSS feed from.")
 
 ######## Set version numbers ########
-set(Launcher_VERSION_MAJOR    0)
-set(Launcher_VERSION_MINOR    7)
-set(Launcher_VERSION_HOTFIX   0)
+# The version is <major>.<minor>.<build>: major and minor change here, by hand, when a change
+# deserves it; the build number comes from the release pipeline and only goes up. Tagging a
+# build (Testing, Stable) never changes its version (the Design repo's Updater.md, Versions).
+set(Launcher_VERSION_MAJOR    1)
+set(Launcher_VERSION_MINOR    0)
 
 # Build number
 set(Launcher_VERSION_BUILD -1 CACHE STRING "Build number. -1 for no build number.")
+# Windows version resources hold each part in 16 bits
+if(Launcher_VERSION_BUILD GREATER 65535)
+    message(FATAL_ERROR "Build number ${Launcher_VERSION_BUILD} doesn't fit a Windows version resource (at most 65535)")
+endif()
+if(Launcher_VERSION_BUILD LESS 0)
+    set(Launcher_VERSION_BUILD_PART 0)
+else()
+    set(Launcher_VERSION_BUILD_PART ${Launcher_VERSION_BUILD})
+endif()
+set(Launcher_VERSION_NAME "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_BUILD_PART}")
 
 # Build platform.
 set(Launcher_BUILD_PLATFORM "" CACHE STRING "A short string identifying the platform that this build was built for. Only used by the notification system and to display in the about dialog.")
 
-# Channel list URL
-set(Launcher_UPDATER_BASE "" CACHE STRING "Base URL for the updater.")
+# Our sites, each a list of base URLs: the main server first, then its copies, in the order they are tried.
+# Every URL on a site is one of its base URLs and a path.
+set(Launcher_FILES_MIRRORS "https://files.multimc.org/;https://files-r2.multimc.org/" CACHE STRING "Base URLs of the files site (updates, notifications, translations, ...), in order.")
+set(Launcher_META_MIRRORS "https://meta.multimc.org/;https://meta-r2.multimc.org/" CACHE STRING "Base URLs of the meta site, in order.")
+foreach(site FILES META)
+    if(NOT Launcher_${site}_MIRRORS)
+        message(FATAL_ERROR "Launcher_${site}_MIRRORS must have at least one base URL")
+    endif()
+    foreach(url ${Launcher_${site}_MIRRORS})
+        if(NOT url MATCHES "^https?://[^/]+/$")
+            message(FATAL_ERROR "Launcher_${site}_MIRRORS: ${url} is not a base URL like https://example.org/")
+        endif()
+    endforeach()
+    # as C++ string literals, one per URL: "a", "b"
+    string(REPLACE ";" "\", \"" Launcher_${site}_MIRRORS_LITERALS "\"${Launcher_${site}_MIRRORS}\"")
+endforeach()
 
-# Notification URL
-set(Launcher_NOTIFICATION_URL "" CACHE STRING "URL for checking for notifications.")
-
-# The metadata server
-set(Launcher_META_URL "https://meta.multimc.org/v1/" CACHE STRING "URL to fetch Launcher's meta files from.")
-
-# paste.ee API key
-set(Launcher_PASTE_EE_API_KEY "utLvciUouSURFzfjPxLBf5W4ISsUX4pwBDF7N1AfZ" CACHE STRING "API key you can get from paste.ee when you register an account")
-
-# Imgur API Client ID
-set(Launcher_IMGUR_CLIENT_ID "5b97b0713fba4a3" CACHE STRING "Client ID you can get from Imgur when you register an application")
-
-# Google analytics ID
-set(Launcher_ANALYTICS_ID "UA-87731965-2" CACHE STRING "ID you can get from Google analytics")
-
-# Bug tracker URL
-set(Launcher_BUG_TRACKER_URL "" CACHE STRING "URL for the bug tracker.")
-
-# Discord URL
-set(Launcher_DISCORD_URL "" CACHE STRING "URL for the Discord guild.")
-
-# Subreddit URL
-set(Launcher_SUBREDDIT_URL "" CACHE STRING "URL for the subreddit.")
-
-# Use the secrets library or a public stub?
-option(Launcher_EMBED_SECRETS "Determines whether to embed secrets. Secrets are separate and non-public." OFF)
+# Which updater a build uses: 1, the current one, or 2, the new one (Design/Updater.md in the
+# MultiMC repository). Both are built into every build.
+set(Launcher_UPDATER_VERSION "1" CACHE STRING "The updater this build uses: 1 or 2")
+# Updater v2: pinned root keys: Ed25519 public keys, 64 hex digits each
+set(Launcher_UPDATER_ROOT_KEYS "" CACHE STRING "Updater v2: pinned root public keys, a list")
+# Updater v2: the keys document compiled in as the floor; it must list exactly the pinned root keys
+set(Launcher_UPDATER_KEYS_FLOOR "" CACHE FILEPATH "Updater v2: the keys document compiled in")
+set(Launcher_UPDATER_SERIAL_FLOOR "0" CACHE STRING "Updater v2: the lowest tags serial accepted")
+# Updater v2: the variant ID this build is, e.g. linux-x86_64-qt5 (see Design/UpdaterFormats.md)
+set(Launcher_UPDATER_VARIANT "" CACHE STRING "Updater v2: this build's variant ID")
+if(NOT Launcher_UPDATER_VERSION MATCHES "^[12]$")
+    message(FATAL_ERROR "Launcher_UPDATER_VERSION must be 1 or 2, not '${Launcher_UPDATER_VERSION}'")
+endif()
+if(NOT Launcher_UPDATER_SERIAL_FLOOR MATCHES "^(0|[1-9][0-9]*)$")
+    message(FATAL_ERROR "Launcher_UPDATER_SERIAL_FLOOR must be a number, not '${Launcher_UPDATER_SERIAL_FLOOR}'")
+endif()
+foreach(key ${Launcher_UPDATER_ROOT_KEYS})
+    if(NOT key MATCHES "^[0-9a-f]+$")
+        message(FATAL_ERROR "Launcher_UPDATER_ROOT_KEYS: ${key} is not lowercase hex")
+    endif()
+endforeach()
+# as C++ string literals, one per key: "a", "b"
+if(Launcher_UPDATER_ROOT_KEYS)
+    string(REPLACE ";" "\", \"" Launcher_UPDATER_ROOT_KEYS_LITERALS "\"${Launcher_UPDATER_ROOT_KEYS}\"")
+endif()
+# The keys document as a string literal of its exact bytes
+set(Launcher_UPDATER_KEYS_FLOOR_BYTES "")
+if(Launcher_UPDATER_KEYS_FLOOR)
+    if(NOT EXISTS "${Launcher_UPDATER_KEYS_FLOOR}")
+        message(FATAL_ERROR "Launcher_UPDATER_KEYS_FLOOR: ${Launcher_UPDATER_KEYS_FLOOR} doesn't exist")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${Launcher_UPDATER_KEYS_FLOOR}")
+    file(READ "${Launcher_UPDATER_KEYS_FLOOR}" floor_hex HEX)
+    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "\\\\x\\1" Launcher_UPDATER_KEYS_FLOOR_BYTES "${floor_hex}")
+endif()
 
 # API Keys
 # NOTE: These API keys are here for convenience. If you rebrand this software or intend to break the terms of service
@@ -118,9 +154,12 @@ option(Launcher_EMBED_SECRETS "Determines whether to embed secrets. Secrets are 
 # breakage to thousands of users.
 # If you don't plan to use these features of this software, you can just remove these values.
 
-# By using this key in your builds you accept the terms of use laid down in
+# Empty on purpose: this fork doesn't ship a Microsoft client ID. Users supply their own at runtime
+# (the MSAClientID setting in the launcher's config file, or the ULTIMMC_MSA_CLIENT_ID environment
+# variable), or a distributor can bake one in here with -DLauncher_MSA_CLIENT_ID=...
+# By using a key in your builds you accept the terms of use laid down in
 # https://docs.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use
-set(Launcher_MSA_CLIENT_ID "f4404707-7bbe-4e40-80ba-85fb2bb825a1" CACHE STRING "Client ID you can get from Microsoft Identity Platform when you register an application")
+set(Launcher_MSA_CLIENT_ID "" CACHE STRING "Client ID you can get from Microsoft Identity Platform when you register an application")
 
 #### Check the current Git commit and branch
 include(GetGitRevisionDescription)
@@ -129,7 +168,7 @@ get_git_head_revision(Launcher_GIT_REFSPEC Launcher_GIT_COMMIT)
 message(STATUS "Git commit: ${Launcher_GIT_COMMIT}")
 message(STATUS "Git refspec: ${Launcher_GIT_REFSPEC}")
 
-set(Launcher_RELEASE_VERSION_NAME "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_HOTFIX}")
+set(Launcher_RELEASE_VERSION_NAME "${Launcher_VERSION_NAME}")
 
 #### Custom target to just print the version.
 add_custom_target(version echo "Version: ${Launcher_RELEASE_VERSION_NAME}")
@@ -147,24 +186,40 @@ find_package(Qt5Xml REQUIRED)
 
 # The Qt5 cmake files don't provide its install paths, so ask qmake.
 include(QMakeQuery)
-query_qmake(QT_INSTALL_PLUGINS QT_PLUGINS_DIR)
-query_qmake(QT_INSTALL_IMPORTS QT_IMPORTS_DIR)
-query_qmake(QT_INSTALL_LIBS QT_LIBS_DIR)
-query_qmake(QT_INSTALL_LIBEXECS QT_LIBEXECS_DIR)
-query_qmake(QT_HOST_DATA QT_DATA_DIR)
-set(QT_MKSPECS_DIR ${QT_DATA_DIR}/mkspecs)
+query_qmake(QUERY QT_INSTALL_PLUGINS RESULT QT_PLUGINS_DIR)
+query_qmake(QUERY QT_INSTALL_LIBS RESULT QT_LIBS_DIR)
+query_qmake(QUERY QT_INSTALL_LIBEXECS RESULT QT_LIBEXECS_DIR)
 
 if (Qt5_POSITION_INDEPENDENT_CODE)
     SET(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
-####################################### Secrets #######################################
+####################################### Branding #######################################
 
-if(Launcher_EMBED_SECRETS)
-    add_subdirectory(secrets)
-else()
-    add_subdirectory(notsecrets)
-endif()
+set(Launcher_CommonName "UltimMC")
+
+set(Launcher_Copyright "UltimMC Contributors")
+set(Launcher_Domain "multimc.org")
+set(Launcher_Name "${Launcher_CommonName}")
+set(Launcher_DisplayName "${Launcher_CommonName} 5")
+# kept as MultiMC on purpose: this is what the fork has always sent to MultiMC's servers
+set(Launcher_UserAgent "MultiMC/5.0")
+set(Launcher_ConfigFile "ultimmc.cfg")
+set(Launcher_Git "https://github.com/UltimMC/Launcher")
+
+set(Launcher_Branding_ICNS "${PROJECT_SOURCE_DIR}/branding/${Launcher_CommonName}.icns")
+# with the version filled in (major,minor,build,0: the Microsoft Store keeps the fourth part)
+set(Launcher_Branding_SourceDir "${PROJECT_SOURCE_DIR}/branding")
+configure_file("${PROJECT_SOURCE_DIR}/branding/multimc.rc.in" "${PROJECT_BINARY_DIR}/branding/multimc.rc" @ONLY)
+set(Launcher_Branding_WindowsRC "${PROJECT_BINARY_DIR}/branding/multimc.rc")
+set(Launcher_Branding_LogoQRC "${PROJECT_SOURCE_DIR}/branding/logo.qrc")
+
+set(Launcher_PASTE_EE_API_KEY "utLvciUouSURFzfjPxLBf5W4ISsUX4pwBDF7N1AfZ")
+set(Launcher_IMGUR_CLIENT_ID "5b97b0713fba4a3")
+set(Launcher_BUG_TRACKER_URL "https://github.com/UltimMC/Launcher/issues")
+set(Launcher_DISCORD_URL "https://discord.gg/multimc")
+set(Launcher_SUBREDDIT_URL "https://www.reddit.com/r/MultiMC/")
+set(Launcher_PATREON_URL "https://www.patreon.com/multimc")
 
 ####################################### Install layout #######################################
 
@@ -202,11 +257,12 @@ if(Launcher_LAYOUT_REAL STREQUAL "mac-bundle")
     set(MACOSX_BUNDLE_BUNDLE_NAME "${Launcher_Name}")
     set(MACOSX_BUNDLE_INFO_STRING "${Launcher_Name}:  Minecraft launcher and management utility.")
     set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.multimc.${Launcher_Name}")
-    set(MACOSX_BUNDLE_BUNDLE_VERSION "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_HOTFIX}.${Launcher_VERSION_BUILD}")
-    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_HOTFIX}.${Launcher_VERSION_BUILD}")
-    set(MACOSX_BUNDLE_LONG_VERSION_STRING "${Launcher_VERSION_MAJOR}.${Launcher_VERSION_MINOR}.${Launcher_VERSION_HOTFIX}.${Launcher_VERSION_BUILD}")
+    # three integers, as the App Store wants; the build part only goes up
+    set(MACOSX_BUNDLE_BUNDLE_VERSION "${Launcher_VERSION_NAME}")
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${Launcher_VERSION_NAME}")
+    set(MACOSX_BUNDLE_LONG_VERSION_STRING "${Launcher_VERSION_NAME}")
     set(MACOSX_BUNDLE_ICON_FILE ${Launcher_Name}.icns)
-    set(MACOSX_BUNDLE_COPYRIGHT "Copyright 2015-2023 ${Launcher_Copyright}")
+    set(MACOSX_BUNDLE_COPYRIGHT "Copyright 2015-2024 ${Launcher_Copyright}")
 
     # directories to look for dependencies
     set(DIRS ${QT_LIBS_DIR} ${QT_LIBEXECS_DIR} ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
@@ -267,19 +323,19 @@ set(NBT_NAME Launcher_nbt++)
 set(NBT_DEST_DIR ${LIBRARY_DEST_DIR})
 add_subdirectory(libraries/libnbtplusplus)
 
-add_subdirectory(libraries/ganalytics) # google analytics library
 add_subdirectory(libraries/systeminfo) # system information library
 add_subdirectory(libraries/hoedown) # markdown parser
 add_subdirectory(libraries/launcher) # java based launcher part for Minecraft
 add_subdirectory(libraries/javacheck) # java compatibility checker
 add_subdirectory(libraries/xz-embedded) # xz compression
+add_subdirectory(libraries/qrcode) # library for generating QR codes
 add_subdirectory(libraries/quazip) # zip manipulation library
-add_subdirectory(libraries/rainbow) # Qt extension for colors
 add_subdirectory(libraries/iconfix) # fork of Qt's QIcon loader
 add_subdirectory(libraries/LocalPeer) # fork of a library from Qt solutions
-add_subdirectory(libraries/classparser) # google analytics library
+add_subdirectory(libraries/classparser) # java class file parser
 add_subdirectory(libraries/optional-bare)
 add_subdirectory(libraries/tomlc99) # toml parser
+add_subdirectory(libraries/monocypher) # signature checks for the updater
 add_subdirectory(libraries/katabasis) # An OAuth2 library that tried to do too much
 
 ############################### Built Artifacts ###############################
