@@ -15,19 +15,23 @@
 
 ## Downloading
 
-Builds are published as [GitHub releases](https://github.com/Vini-Boas/UltimMC/releases). The **nightly** build is refreshed on every change to `develop` and is not a stable release. Releases tagged `v*` are permanent.
+Download the [latest release](https://github.com/Vini-Boas/UltimMC/releases/latest) for your system:
 
-Direct downloads of the nightly build, for specific platforms:
+- *[Windows \(32-bit, also runs on 64-bit Windows\)](https://github.com/Vini-Boas/UltimMC/releases/latest/download/mmc-cracked-win32.zip)*.
 
-- *[Windows \(32-bit, also runs on 64-bit Windows\)](https://github.com/Vini-Boas/UltimMC/releases/download/nightly/mmc-cracked-win32.zip)*.
+- *[Linux (64-bit)](https://github.com/Vini-Boas/UltimMC/releases/latest/download/mmc-cracked-lin64.zip)*.
 
-- *[Linux (64-bit)](https://github.com/Vini-Boas/UltimMC/releases/download/nightly/mmc-cracked-lin64.zip)*.
-
-- *[macOS (10.14 and newer)](https://github.com/Vini-Boas/UltimMC/releases/download/nightly/mmc-cracked-osx64.zip)*.
+- *[macOS (10.14 and newer)](https://github.com/Vini-Boas/UltimMC/releases/latest/download/mmc-cracked-osx64.zip)*.
 
 > [!NOTE]
 > In the case you're using macOS then another additional step you might need to do
 > is to make `UltimMC` an executable by running the command `chmod +x UltimMC.app/Contents/MacOS/UltimMC` in the terminal.
+
+### Nightly builds
+
+If you want the newest changes before they are released, there is a [nightly build](https://github.com/Vini-Boas/UltimMC/releases/tag/nightly). It is refreshed on every change to `develop`, is not a stable release, and may be broken.
+
+- *[Windows](https://github.com/Vini-Boas/UltimMC/releases/download/nightly/mmc-cracked-win32.zip)*, *[Linux](https://github.com/Vini-Boas/UltimMC/releases/download/nightly/mmc-cracked-lin64.zip)* and *[macOS](https://github.com/Vini-Boas/UltimMC/releases/download/nightly/mmc-cracked-osx64.zip)*.
 
 ## Installing and Using
 
