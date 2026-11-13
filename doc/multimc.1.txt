@@ -15,21 +15,21 @@ SYNOPSIS
 
 DESCRIPTION
 -----------
-MultiMC is a custom launcher for Minecraft that allows you to easily manage
+UltimMC is a custom launcher for Minecraft that allows you to easily manage
 multiple installations of Minecraft at once. It also allows you to easily
 install and remove mods by simply dragging and dropping.
-Here are the current features of MultiMC.
+Here are the current features of UltimMC.
 
 OPTIONS
 -------
 *-d, --dir*='DIRECTORY'::
-    Use 'DIRECTORY' as the MultiMC root.
+    Use 'DIRECTORY' as the UltimMC root.
 
 *-l, --launch*='INSTANCE_ID'::
     Launch the instance specified by 'INSTANCE_ID'.
 
 *--alive*::
-    Write a small 'live.check' file after MultiMC starts.
+    Write a small 'live.check' file after UltimMC starts.
 
 *-h, --help*::
     Display help text and exit.
@@ -49,13 +49,11 @@ EXIT STATUS
 
 BUGS
 ----
-<https://github.com/MultiMC/Launcher/issues>
+<https://github.com/Vini-Boas/UltimMC/issues>
 
 RESOURCES
 ---------
-GitHub: <https://github.com/MultiMC/Launcher>
-
-Main website: <https://multimc.org>
+GitHub: <https://github.com/Vini-Boas/UltimMC>
 
 AUTHORS
 -------
