@@ -10,6 +10,15 @@ on:
   schedule:
     - cron: "0 0 1 * *"
 
+# One run at a time per branch, tag or pull request.
+# - A new push to a pull request cancels that PR's older run: it tests code that no longer exists.
+# - Runs on develop and on tags are never cancelled, only queued one after the other. They publish
+#   releases, and the nightly release is deleted and created again, so stopping one halfway (or two
+#   running together) could leave it missing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-linux:
     name: build-linux
