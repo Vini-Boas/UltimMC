@@ -2,6 +2,19 @@
 
 #include "minecraft/auth/ElybyTextures.h"
 
+namespace {
+
+// Responses of GET /textures/<name>. They are named here, not written inside the QVERIFY macros,
+// because moc can't parse a raw string literal in a macro call.
+const char* classicSkin = R"({"SKIN":{"url":"http://ely.by/storage/skins/69c6740d.png"}})"; // as the live service sends it
+const char* slimSkin = R"({"SKIN":{"url":"http://example.com/s.png","metadata":{"model":"slim"}}})";
+const char* otherModel = R"({"SKIN":{"url":"http://example.com/s.png","metadata":{"model":"default"}}})";
+const char* capeOnly = R"({"CAPE":{"url":"http://example.com/c.png"}})";
+const char* skinWithoutAddress = R"({"SKIN":{}})";
+const char* notJson = "<html>Bad Gateway</html>";
+
+}
+
 class ElybyTexturesTest : public QObject
 {
     Q_OBJECT
@@ -11,9 +24,8 @@ slots:
 
     void a_classic_skin_has_no_metadata()
     {
-        // the real response for a classic skin
         ElybyTextures textures;
-        QVERIFY(parseElybyTextures(R"({"SKIN":{"url":"http://ely.by/storage/skins/69c6740d.png"}})", textures));
+        QVERIFY(parseElybyTextures(classicSkin, textures));
         QVERIFY(textures.hasSkin);
         QCOMPARE(textures.skinUrl, QString("http://ely.by/storage/skins/69c6740d.png"));
         QVERIFY(!textures.slim);
@@ -22,7 +34,7 @@ slots:
     void a_slim_skin_says_so_in_its_metadata()
     {
         ElybyTextures textures;
-        QVERIFY(parseElybyTextures(R"({"SKIN":{"url":"http://example.com/s.png","metadata":{"model":"slim"}}})", textures));
+        QVERIFY(parseElybyTextures(slimSkin, textures));
         QVERIFY(textures.hasSkin);
         QVERIFY(textures.slim);
     }
@@ -30,14 +42,14 @@ slots:
     void metadata_that_isnt_slim_is_classic()
     {
         ElybyTextures textures;
-        QVERIFY(parseElybyTextures(R"({"SKIN":{"url":"http://example.com/s.png","metadata":{"model":"default"}}})", textures));
+        QVERIFY(parseElybyTextures(otherModel, textures));
         QVERIFY(!textures.slim);
     }
 
     void a_cape_without_a_skin_means_no_skin()
     {
         ElybyTextures textures;
-        QVERIFY(parseElybyTextures(R"({"CAPE":{"url":"http://example.com/c.png"}})", textures));
+        QVERIFY(parseElybyTextures(capeOnly, textures));
         QVERIFY(!textures.hasSkin);
     }
 
@@ -54,14 +66,14 @@ slots:
     void a_response_that_is_not_json_is_rejected()
     {
         ElybyTextures textures;
-        QVERIFY(!parseElybyTextures("<html>Bad Gateway</html>", textures));
+        QVERIFY(!parseElybyTextures(notJson, textures));
         QVERIFY(!textures.hasSkin);
     }
 
     void a_skin_without_an_address_is_rejected()
     {
         ElybyTextures textures;
-        QVERIFY(!parseElybyTextures(R"({"SKIN":{}})", textures));
+        QVERIFY(!parseElybyTextures(skinWithoutAddress, textures));
         QVERIFY(!textures.hasSkin);
     }
 };
