@@ -125,6 +125,8 @@ private:
 
     QWidget* m_unsupportedPage = nullptr;
     QLabel* m_unsupportedLabel = nullptr;
+    //! Shown in place of the skin editor for accounts whose skins can't be changed from here
+    QLabel* m_noSkinsLabel = nullptr;
 
 private slots:
     void onGetFreshCodeButtonClicked(bool);

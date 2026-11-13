@@ -142,16 +142,17 @@ slots:
         QVERIFY(placeholder->saveToJson() == entry);
     }
 
-    void an_unsupported_account_is_disabled_and_cannot_be_the_default()
+    void an_unsupported_account_can_be_selected_but_not_checked_or_made_the_default()
     {
         auto placeholder = MinecraftAccount::loadFromJsonV3(oldMojangEntry());
         AccountList list;
         list.addAccount(placeholder);
 
         const auto index = list.index(0);
-        QVERIFY(!(list.flags(index) & Qt::ItemIsEnabled));
+        // Regression: views won't select a disabled item, so it has to stay enabled to be removable
+        QVERIFY(list.flags(index) & Qt::ItemIsEnabled);
+        QVERIFY(list.flags(index) & Qt::ItemIsSelectable);
         QVERIFY(!(list.flags(index) & Qt::ItemIsUserCheckable));
-        QVERIFY(list.flags(index) & Qt::ItemIsSelectable); // so it can still be selected and removed
 
         list.setDefaultAccount(placeholder);
         QVERIFY(!list.defaultAccount());

@@ -81,6 +81,12 @@ public:
         return false;
     }
 
+    //! Shown instead of the skin editor when canChangeSkin() is false. May contain simple rich text (links).
+    virtual QString skinHint()
+    {
+        return QObject::tr("Skins can't be changed for this kind of account.");
+    }
+
     bool setAuthServer(std::shared_ptr<AuthServer> authServer)
     {
         m_authServer = authServer;

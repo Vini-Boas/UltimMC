@@ -457,9 +457,20 @@ void AccountsDialog::updateStates()
 
     // Full account page
     ui->fullAccountPage->setEnabled(accountIsReady);
-    // Skins and capes can only be changed on Microsoft accounts. Refresh and sign out (the header bar) stay usable.
+    // Skins and capes can only be changed on Microsoft accounts. Other accounts still show the skin they
+    // have (Ely.by), read-only, and get a short note on why it can't be edited. With no skin at all
+    // (local accounts) there is nothing to preview, so only the note is shown.
     auto provider = m_currentAccount->provider();
-    ui->splitter->setEnabled(provider && provider->canChangeSkin());
+    const bool canChangeSkin = provider && provider->canChangeSkin();
+    const bool hasSkin = !m_currentAccount->getSkin().isEmpty();
+    ui->splitter->setVisible(canChangeSkin || hasSkin);
+    ui->tabWidget->setEnabled(canChangeSkin);
+    ui->groupBox->setEnabled(canChangeSkin);
+    m_noSkinsLabel->setVisible(!canChangeSkin);
+    if(!canChangeSkin && provider)
+    {
+        m_noSkinsLabel->setText(provider->skinHint());
+    }
     if(prevAccount != m_currentAccount)
     {
         revertEdits();
@@ -535,6 +546,18 @@ void AccountsDialog::setupForkPages()
     else
     {
         ui->loginPage->layout()->addWidget(addBox);
+    }
+
+    // A note shown in place of the skin editor for accounts whose skins can't be changed here (see updateStates())
+    m_noSkinsLabel = new QLabel(ui->fullAccountPage);
+    m_noSkinsLabel->setWordWrap(true);
+    m_noSkinsLabel->setAlignment(Qt::AlignCenter);
+    m_noSkinsLabel->setTextFormat(Qt::RichText);
+    m_noSkinsLabel->setOpenExternalLinks(true);
+    m_noSkinsLabel->setVisible(false);
+    if(auto fullLayout = qobject_cast<QVBoxLayout*>(ui->fullAccountPage->layout()))
+    {
+        fullLayout->addWidget(m_noSkinsLabel, 1);
     }
 
     // The page shown for an account this version can't use. Filled in by updateStates().

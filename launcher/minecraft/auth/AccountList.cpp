@@ -27,6 +27,8 @@
 #include <QDir>
 #include <QTimer>
 #include <QIcon>
+#include <QGuiApplication>
+#include <QPalette>
 
 #include <QDebug>
 
@@ -420,6 +422,9 @@ QVariant AccountList::data(const QModelIndex &index, int role) const
                 return QVariant::fromValue(account);
             case Qt::CheckStateRole:
                 return Qt::Unchecked;
+            case Qt::ForegroundRole:
+                // greyed out, without being disabled (see flags())
+                return QGuiApplication::palette().brush(QPalette::Disabled, QPalette::Text);
             default:
                 return QVariant();
         }
@@ -479,8 +484,10 @@ Qt::ItemFlags AccountList::flags(const QModelIndex &index) const
     auto entry = at(index.row());
     if(entry.isAccount && !entry.account->isSupported())
     {
-        // Disabled (greyed out), and can't be made the default. Still selectable, so it can be removed.
-        return Qt::ItemIsSelectable;
+        // Can't be checked, so it can't be made the default. It looks greyed out (Qt::ForegroundRole in data()).
+        // NOTE: it must stay Qt::ItemIsEnabled. Views refuse to select a disabled item, and then there
+        // would be no way to select it and remove it.
+        return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
     }
 
     return Qt::ItemIsUserCheckable | Qt::ItemIsEnabled | Qt::ItemIsSelectable;

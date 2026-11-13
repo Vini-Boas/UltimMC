@@ -31,5 +31,10 @@ public:
         return ((QString) "http://127.0.0.1:%1/auth/").arg(m_authServer->port());
     };
 
+    QString skinHint() override
+    {
+        return QObject::tr("Local accounts don't have a skin.");
+    }
+
     shared_qobject_ptr<AccountTask> createRefreshTask(AccountData* data) override;
 };

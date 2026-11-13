@@ -18,4 +18,9 @@ public:
 
 private slots:
     void onRequestDone(QNetworkReply::NetworkError, QByteArray, QList<QNetworkReply::RawHeaderPair>);
+    void onSkinDone(QNetworkReply::NetworkError, QByteArray, QList<QNetworkReply::RawHeaderPair>);
+
+private:
+    //! The profile lookup doesn't include skins, so get the skin from Ely.by's skin system.
+    void fetchSkin();
 };
