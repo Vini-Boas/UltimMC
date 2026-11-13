@@ -69,10 +69,10 @@ public:
         return "";
     };
 
-    //! Url of the skin to display in the launcher
-    virtual QUrl resolveSkinUrl(QString id, QString name)
+    //! Where to ask which skin (and which arm model) a player has, for providers with a skin system. Empty if none.
+    virtual QUrl texturesUrl(const QString& name)
     {
-        return QUrl(((QString) "https://crafatar.com/skins/%1.png").arg(id));
+        return QUrl();
     };
 
     //! Whether the launcher can change the skin of these accounts (only Microsoft ones)

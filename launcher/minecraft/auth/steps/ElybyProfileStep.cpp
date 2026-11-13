@@ -3,8 +3,8 @@
 #include <QNetworkRequest>
 
 #include "minecraft/auth/AuthRequest.h"
+#include "minecraft/auth/ElybyTextures.h"
 #include "minecraft/auth/Parsers.h"
-#include "skins/SkinModelGuess.h"
 #include "skins/SkinUtils.h"
 
 ElybyProfileStep::ElybyProfileStep(AccountData* data) : AuthStep(data) {
@@ -54,6 +54,9 @@ void ElybyProfileStep::onRequestDone(
         );
         return;
     }
+
+    // Parsing the profile starts from a clean one, but the skin we already have is still good
+    const Skin previousSkin = m_data->minecraftProfile.skin;
     if(!Parsers::parseMinecraftProfile(data, m_data->minecraftProfile)) {
         m_data->minecraftProfile = MinecraftProfile();
         emit finished(
@@ -62,26 +65,59 @@ void ElybyProfileStep::onRequestDone(
         );
         return;
     }
+    m_data->minecraftProfile.skin = previousSkin;
 
     fetchSkin();
 }
 
 void ElybyProfileStep::fetchSkin() {
-    if (!m_data->provider) {
-        emit finished(AccountTaskState::STATE_WORKING, tr("Minecraft Java profile acquisition succeeded."));
+    const QUrl url = m_data->provider ? m_data->provider->texturesUrl(m_data->minecraftProfile.name) : QUrl();
+    if (url.isEmpty() || !url.isValid()) {
+        finishSkin();
         return;
     }
 
-    auto url = m_data->provider->resolveSkinUrl(m_data->minecraftProfile.id, m_data->minecraftProfile.name);
-    m_data->minecraftProfile.skin.url = url.toString();
-    if (m_data->minecraftProfile.skin.variant.isEmpty()) {
-        // until the skin is downloaded and looked at (see onSkinDone), and if that fails
-        m_data->minecraftProfile.skin.variant = "CLASSIC";
+    AuthRequest *requestor = new AuthRequest(this);
+    connect(requestor, &AuthRequest::finished, this, &ElybyProfileStep::onTexturesDone);
+    requestor->get(QNetworkRequest(url));
+}
+
+void ElybyProfileStep::onTexturesDone(
+    QNetworkReply::NetworkError error,
+    QByteArray data,
+    QList<QNetworkReply::RawHeaderPair> headers
+) {
+    auto requestor = qobject_cast<AuthRequest *>(QObject::sender());
+    requestor->deleteLater();
+
+    ElybyTextures textures;
+    if (error == QNetworkReply::ContentNotFoundError) {
+        // the player has no textures. 'textures' stays empty.
+    } else if (error != QNetworkReply::NoError) {
+        // No network, server trouble... keep the skin we already have.
+        qWarning() << "Ely.by textures: request failed:" << requestor->errorString_;
+        finishSkin();
+        return;
+    } else if (!parseElybyTextures(data, textures)) {
+        qWarning() << "Ely.by textures: couldn't understand the response (HTTP status" << requestor->httpStatus_ << ")";
+        finishSkin();
+        return;
     }
 
-    AuthRequest *requestor = new AuthRequest(this);
-    connect(requestor, &AuthRequest::finished, this, &ElybyProfileStep::onSkinDone);
-    requestor->get(QNetworkRequest(url));
+    if (!textures.hasSkin) {
+        // Ely.by says the player has no skin, so forget any old one
+        m_data->minecraftProfile.skin = Skin();
+        finishSkin();
+        return;
+    }
+
+    // Ely.by only says so when the skin is slim. No metadata means classic.
+    m_data->minecraftProfile.skin.url = textures.skinUrl;
+    m_data->minecraftProfile.skin.variant = textures.slim ? "SLIM" : "CLASSIC";
+
+    AuthRequest *skinRequestor = new AuthRequest(this);
+    connect(skinRequestor, &AuthRequest::finished, this, &ElybyProfileStep::onSkinDone);
+    skinRequestor->get(QNetworkRequest(QUrl(textures.skinUrl)));
 }
 
 void ElybyProfileStep::onSkinDone(
@@ -92,22 +128,26 @@ void ElybyProfileStep::onSkinDone(
     auto requestor = qobject_cast<AuthRequest *>(QObject::sender());
     requestor->deleteLater();
 
-    // Not having a skin, or not being able to fetch it right now, never fails the account:
-    // it works fine without one. 404 means the player has no skin, so forget any old one.
-    if (error == QNetworkReply::NoError && !data.isEmpty()) {
-        m_data->minecraftProfile.skin.data = data;
-
-        // Ely.by's skin file doesn't say which arm model it is for, so work it out from the picture
+    if (error == QNetworkReply::NoError) {
+        // Only keep what really is a skin. Anything else (an error page, a redirect) would later look
+        // like a skin we can't draw.
         QImage image;
         QString textureId;
         if (Skins::readSkinFromData(data, image, textureId)) {
-            const bool slim = Skins::guessSkinModel(image) == Skins::Model::Slim;
-            m_data->minecraftProfile.skin.variant = slim ? "SLIM" : "CLASSIC";
+            m_data->minecraftProfile.skin.data = data;
+        } else {
+            qWarning() << "Ely.by skin: the response isn't a skin picture (HTTP status" << requestor->httpStatus_ << ")";
         }
     } else if (error == QNetworkReply::ContentNotFoundError) {
         m_data->minecraftProfile.skin.data.clear();
+    } else {
+        qWarning() << "Ely.by skin: download failed:" << requestor->errorString_;
     }
 
+    finishSkin();
+}
+
+void ElybyProfileStep::finishSkin() {
     emit finished(
         AccountTaskState::STATE_WORKING,
         tr("Minecraft Java profile acquisition succeeded.")

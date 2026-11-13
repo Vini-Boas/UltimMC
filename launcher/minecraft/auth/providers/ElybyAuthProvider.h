@@ -31,9 +31,10 @@ public:
         return "https://authserver.ely.by/auth/";
     };
 
-    QUrl resolveSkinUrl(QString id, QString name) override
+    QUrl texturesUrl(const QString& name) override
     {
-        return QUrl(((QString) "https://skinsystem.ely.by/skins/%1.png").arg(QString::fromLatin1(QUrl::toPercentEncoding(name))));
+        // https://docs.ely.by/en/skins-system.html: JSON with the skin's address, and its model if it is slim
+        return QUrl(((QString) "https://skinsystem.ely.by/textures/%1").arg(QString::fromLatin1(QUrl::toPercentEncoding(name))));
     }
 
     QString skinHint() override

@@ -138,8 +138,8 @@ add_unit_test(AccountList
     LIBS Launcher_logic
     )
 
-add_unit_test(SkinModelGuess
-    SOURCES skins/SkinModelGuess_test.cpp
+add_unit_test(ElybyTextures
+    SOURCES minecraft/auth/ElybyTextures_test.cpp
     LIBS Launcher_logic
     )
 
@@ -349,6 +349,8 @@ set(MINECRAFT_SOURCES
     minecraft/auth/AuthStep.h
     minecraft/auth/MinecraftAccount.cpp
     minecraft/auth/MinecraftAccount.h
+    minecraft/auth/ElybyTextures.cpp
+    minecraft/auth/ElybyTextures.h
     minecraft/auth/Parsers.cpp
     minecraft/auth/Parsers.h
 
@@ -760,8 +762,6 @@ SET(LAUNCHER_SOURCES
     skins/SkinRenderer.cpp
     skins/SkinWidget.h
     skins/SkinWidget.cpp
-    skins/SkinModelGuess.h
-    skins/SkinModelGuess.cpp
     skins/SkinTypes.h
     skins/SkinTypes.cpp
     skins/SkinUtils.h

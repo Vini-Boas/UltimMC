@@ -462,7 +462,8 @@ void AccountsDialog::updateStates()
     // (local accounts) there is nothing to preview, so only the note is shown.
     auto provider = m_currentAccount->provider();
     const bool canChangeSkin = provider && provider->canChangeSkin();
-    const bool hasSkin = !m_currentAccount->getSkin().isEmpty();
+    // can it really be drawn? (data that isn't a skin picture doesn't count)
+    const bool hasSkin = !m_currentAccount->getFace().isNull();
     ui->splitter->setVisible(canChangeSkin || hasSkin);
     ui->tabWidget->setEnabled(canChangeSkin);
     ui->groupBox->setEnabled(canChangeSkin);

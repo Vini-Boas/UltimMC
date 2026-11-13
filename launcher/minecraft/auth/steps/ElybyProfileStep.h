@@ -18,9 +18,15 @@ public:
 
 private slots:
     void onRequestDone(QNetworkReply::NetworkError, QByteArray, QList<QNetworkReply::RawHeaderPair>);
+    void onTexturesDone(QNetworkReply::NetworkError, QByteArray, QList<QNetworkReply::RawHeaderPair>);
     void onSkinDone(QNetworkReply::NetworkError, QByteArray, QList<QNetworkReply::RawHeaderPair>);
 
 private:
-    //! The profile lookup doesn't include skins, so get the skin from Ely.by's skin system.
+    /*!
+     * The profile lookup doesn't include skins. Ely.by's skin system does, in two steps:
+     * ask it where the skin is (and which model it is for), then download the picture.
+     * Neither can fail the account: it works fine without a skin.
+     */
     void fetchSkin();
+    void finishSkin();
 };
