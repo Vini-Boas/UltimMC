@@ -133,6 +133,11 @@ add_unit_test(Json
     LIBS Launcher_logic
     )
 
+add_unit_test(AccountList
+    SOURCES minecraft/auth/AccountList_test.cpp
+    LIBS Launcher_logic
+    )
+
 set(PATHMATCHER_SOURCES
     # Path matchers
     pathmatcher/FSTreeMatcher.h
